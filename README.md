@@ -26,3 +26,4 @@ If you want to add a new awesome feature, please follow the policy of making cha
     * It is okay to create many sequential pull requests per single ticket
     * It is okay to send pull request with no unit tests, however, we appreciate writing "tests are coming" in the pull request summary if you plan to add them later
 1. Once code review is started, please **do not add anything** besides unit tests and changes requested by reviewers to your branch. If you add some 500 LOC in addition to already reviewed then review essentially starts from scratch and the process never converges. We want `tkt-` branches to be merged as soon as possible.
+1. You will get a lot of comments in the review. Please **reply to every comment** with either single word "Done" if you agree with the comment and made the requested changes or with something more verbose. Replying is a way to ensure both yourself and reviewer that you don't miss or didn't ignore any comment.
