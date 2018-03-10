@@ -1,16 +1,13 @@
-message Text {
-  string text = 0
+syntax = "proto3";
+
+message GetVersionResponse {
+    string text = 1;
 }
 
-message Commit {
-  string UserName = 0
-  int64 editPosition = 1
-  optional string insertion = 2
-  optional int64 deletedSymbolsCount = 3
+message GetVersionRequest {
+    int32 version = 1;
 }
 
 service Cosmas {
-  rpc makeCommit(Commit) returns () {}
-  rpc createNewVersion () returns (Text) {}
-  rpc getVersion (int32) returns (Text) {}
+    rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {}
 }
