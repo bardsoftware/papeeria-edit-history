@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/bardsoftware/papeeria-edit-history.svg?branch=master)](https://travis-ci.org/bardsoftware/papeeria-edit-history)
+
 ## Summary
 
 This is an experimental component of Papeeria which is responsible for storing file edit history. Its main functions are as follows:
