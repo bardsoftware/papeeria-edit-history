@@ -20,7 +20,6 @@ buildscript {
 sourceSets {
     main {
         java {
-            // include self written and generated code
             srcDirs 'src/main/java', 'generated/source/proto/main/java'
         }
     }
