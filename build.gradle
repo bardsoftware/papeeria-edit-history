@@ -1,4 +1,4 @@
-group 'iisuslik43.ru'
+group 'com.bardsoftware.papeeria.backend.cosmas'
 version '1.0-SNAPSHOT'
 
 apply plugin: 'java'
