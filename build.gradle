@@ -20,7 +20,8 @@ buildscript {
 sourceSets {
     main {
         java {
-            srcDirs 'src/main/java', 'generated/source/proto/main/java'
+            srcDirs 'src/main/java', 'generated/source/proto/main/java',
+                    'generated/source/proto/main/grpc'
         }
     }
 }
@@ -53,6 +54,14 @@ protobuf {
             grpc {}
         }
     }
+}
+
+task cosmasServer(type: CreateStartScripts) {
+    mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasServer'
+}
+
+task cosmasClient(type: CreateStartScripts) {
+    mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasClient'
 }
 
 compileKotlin {
