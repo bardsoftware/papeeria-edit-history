@@ -32,7 +32,7 @@ class CosmasClient(host: String, port: Int) {
     fun getVersion(version: Int) {
         val request: GetVersionRequest = GetVersionRequest.newBuilder().setVersion(version).build()
         val response: GetVersionResponse = blockingStub.getVersion(request)
-        print(response.text)
+        println(response.text)
     }
 
     @Throws(InterruptedException::class)
@@ -43,6 +43,7 @@ class CosmasClient(host: String, port: Int) {
 
 fun main(args: Array<String>) {
     val client = CosmasClient("localhost", 50051)
+    println("Start working")
     try {
         client.getVersion(0)
     } finally {

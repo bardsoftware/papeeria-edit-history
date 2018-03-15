@@ -47,6 +47,7 @@ class CosmasServer {
 
 fun main(args : Array<String>) {
     val server = CosmasServer()
+    println("Start working")
     server.start()
     server.blockUntilShutDown()
 }
@@ -56,6 +57,7 @@ class CosmasImpl : CosmasImplBase() {
     override fun getVersion(request: GetVersionRequest?,
                             responseObserver: StreamObserver<GetVersionResponse>?) {
         val version = request?.version
+        println(version)
         val response: GetVersionResponse =
                 GetVersionResponse.newBuilder().setText(textVersions[version!!]).build()
         responseObserver?.onNext(response)

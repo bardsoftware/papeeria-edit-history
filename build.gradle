@@ -1,9 +1,12 @@
 group 'com.bardsoftware.papeeria.backend.cosmas'
 version '1.0-SNAPSHOT'
 
-apply plugin: 'java'
+//apply plugin: 'java'
 apply plugin: 'kotlin'
 apply plugin: 'com.google.protobuf'
+apply plugin: 'idea'
+// Provide convenience executables for trying out the examples.
+apply plugin: 'application'
 
 buildscript {
     ext.kotlin_version = '1.2.30'
@@ -56,17 +59,24 @@ protobuf {
     }
 }
 
+startScripts.enabled = false
+
 task cosmasServer(type: CreateStartScripts) {
     mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasServer'
+    applicationName = 'cosmas-server'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task cosmasClient(type: CreateStartScripts) {
     mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasClient'
+    applicationName = 'cosmas-client'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
 }
 
-compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-}
-compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+applicationDistribution.into('bin') {
+    from(cosmasClient)
+    from(cosmasServer)
+    fileMode = 0755
 }
