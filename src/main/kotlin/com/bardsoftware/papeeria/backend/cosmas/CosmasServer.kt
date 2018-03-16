@@ -21,12 +21,17 @@ import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
 import io.grpc.Server
 import io.grpc.ServerBuilder
 
+/**
+ * Simple server that will wait for request and will send response back
+ * @author Aleksandr Fedotov (iisuslik43)
+ */
 class CosmasServer {
     private val PORT = 50051
     private val server: Server = ServerBuilder
             .forPort(PORT)
             .addService(CosmasImpl())
             .build()
+
     fun start() {
         server.start()
         Runtime.getRuntime().addShutdownHook(object : Thread() {
@@ -39,28 +44,33 @@ class CosmasServer {
     private fun stop() {
         server.shutdown()
     }
+
     fun blockUntilShutDown() {
         server.awaitTermination()
     }
 }
 
 
-fun main(args : Array<String>) {
+fun main(args: Array<String>) {
     val server = CosmasServer()
     println("Start working")
     server.start()
     server.blockUntilShutDown()
 }
 
+/**
+ * Special class that can work with request from client
+ */
 class CosmasImpl : CosmasImplBase() {
-    private val textVersions= arrayOf("ver0", "ver1", "ver2")
+    private val textVersions = arrayOf("ver0", "ver1", "ver2")
     override fun getVersion(request: GetVersionRequest?,
                             responseObserver: StreamObserver<GetVersionResponse>?) {
         val version = request?.version
-        println(version)
+        println("Get request for version: $version")
         val response: GetVersionResponse =
                 GetVersionResponse.newBuilder().setText(textVersions[version!!]).build()
         responseObserver?.onNext(response)
         responseObserver?.onCompleted()
+        println("Send back text: ${textVersions[version]}")
     }
 }

@@ -1,5 +1,3 @@
-package com.bardsoftware.papeeria.backend.cosmas
-
 /**
 Copyright 2018 BarD Software s.r.o
 
@@ -15,13 +13,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
+package com.bardsoftware.papeeria.backend.cosmas
+
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import java.util.concurrent.TimeUnit
 
-
+/**
+ * Simple client that will send a request to Cosmas server and wait for response
+ * @author Aleksandr Fedotov (iisuslik43)
+ */
 class CosmasClient(host: String, port: Int) {
     val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port)
             .usePlaintext(true)
@@ -30,9 +33,10 @@ class CosmasClient(host: String, port: Int) {
 
 
     fun getVersion(version: Int) {
+        println("Ask for version: $version")
         val request: GetVersionRequest = GetVersionRequest.newBuilder().setVersion(version).build()
         val response: GetVersionResponse = blockingStub.getVersion(request)
-        println(response.text)
+        println("Get text: ${response.text}")
     }
 
     @Throws(InterruptedException::class)
