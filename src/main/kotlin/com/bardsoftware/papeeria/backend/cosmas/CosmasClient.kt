@@ -17,6 +17,8 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
+import com.xenomachina.argparser.ArgParser
+import com.xenomachina.argparser.default
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import java.util.concurrent.TimeUnit
@@ -26,10 +28,10 @@ import java.util.concurrent.TimeUnit
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasClient(host: String, port: Int) {
-    val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port)
+    private val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port)
             .usePlaintext(true)
             .build()
-    val blockingStub = newBlockingStub(channel)
+    private val blockingStub = newBlockingStub(channel)
 
 
     fun getVersion(version: Int) {
@@ -46,11 +48,20 @@ class CosmasClient(host: String, port: Int) {
 }
 
 fun main(args: Array<String>) {
-    val client = CosmasClient("localhost", 50051)
-    println("Start working")
+    val arg = CosmasClientArgs(ArgParser(args))
+    println("Try to bind in host ${arg.serverHost} and port ${arg.serverPort}")
+    val client = CosmasClient(arg.serverHost, arg.serverPort)
+    println("Start working in host ${arg.serverHost} and port ${arg.serverPort}")
     try {
         client.getVersion(0)
     } finally {
         client.shutdown()
     }
+}
+
+class CosmasClientArgs(parser: ArgParser) {
+    val serverPort: Int by parser.storing("--server-port", help = "choose server port")
+    { toInt() }.default { 50051 }
+    val serverHost: String by parser.storing("--server-host", help = "choose server host")
+            .default { "localhost" }
 }

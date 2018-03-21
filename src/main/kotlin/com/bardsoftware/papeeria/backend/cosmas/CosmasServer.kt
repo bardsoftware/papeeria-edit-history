@@ -20,15 +20,16 @@ import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
 import io.grpc.Server
 import io.grpc.ServerBuilder
+import com.xenomachina.argparser.ArgParser
+import com.xenomachina.argparser.default
 
 /**
  * Simple server that will wait for request and will send response back
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasServer {
-    private val PORT = 50051
+class CosmasServer(port: Int) {
     private val server: Server = ServerBuilder
-            .forPort(PORT)
+            .forPort(port)
             .addService(CosmasImpl())
             .build()
 
@@ -52,8 +53,10 @@ class CosmasServer {
 
 
 fun main(args: Array<String>) {
-    val server = CosmasServer()
-    println("Start working")
+    val arg = CosmasServerArgs(ArgParser(args))
+    println("Try to bind in port ${arg.port}")
+    val server = CosmasServer(arg.port)
+    println("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
 }
@@ -63,14 +66,18 @@ fun main(args: Array<String>) {
  */
 class CosmasImpl : CosmasImplBase() {
     private val textVersions = arrayOf("ver0", "ver1", "ver2")
-    override fun getVersion(request: GetVersionRequest?,
-                            responseObserver: StreamObserver<GetVersionResponse>?) {
-        val version = request?.version
+    override fun getVersion(request: GetVersionRequest,
+                            responseObserver: StreamObserver<GetVersionResponse>) {
+        val version = request.version
         println("Get request for version: $version")
         val response: GetVersionResponse =
-                GetVersionResponse.newBuilder().setText(textVersions[version!!]).build()
-        responseObserver?.onNext(response)
-        responseObserver?.onCompleted()
+                GetVersionResponse.newBuilder().setText(textVersions[version]).build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
         println("Send back text: ${textVersions[version]}")
     }
+}
+
+class CosmasServerArgs(parser: ArgParser) {
+    val port: Int by parser.storing("--port", help = "choose port") {toInt()}.default { 50051 }
 }

@@ -1,6 +1,7 @@
 group 'com.bardsoftware.papeeria.backend.cosmas'
 version '1.0-SNAPSHOT'
 
+
 apply plugin: 'kotlin'
 apply plugin: 'com.google.protobuf'
 apply plugin: 'idea'
@@ -11,6 +12,7 @@ buildscript {
 
     repositories {
         mavenCentral()
+        jcenter()
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -31,6 +33,7 @@ sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
+    jcenter()
 }
 
 dependencies {
@@ -40,6 +43,8 @@ dependencies {
     compile 'io.grpc:grpc-stub:1.+'
     compile 'io.grpc:grpc-protobuf:1.+'
     compile "io.grpc:grpc-netty:1.+"
+    compile "io.grpc:grpc-testing:1.+"
+    compile "com.xenomachina:kotlin-argparser:2.0.4"
 }
 
 protobuf {
@@ -57,6 +62,8 @@ protobuf {
         }
     }
 }
+
+mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasServerKt'
 
 startScripts.enabled = false
 
