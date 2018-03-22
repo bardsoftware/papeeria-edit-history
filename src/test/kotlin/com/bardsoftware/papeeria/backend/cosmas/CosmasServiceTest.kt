@@ -21,15 +21,18 @@ import io.grpc.internal.testing.StreamRecorder
 import org.junit.Before
 
 /**
- * This is simple test to check that CosmasImpl class returns correct response.
+ * This is some tests for CosmasService class
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasServiceTest {
+
     private var service = CosmasService()
+
     @Before
     fun testInitialization() {
-       service = CosmasService()
+        service = CosmasService()
     }
+
     @Test
     fun addOneVersion() {
         addFileToService("Here comes the sun")
@@ -52,11 +55,7 @@ class CosmasServiceTest {
     private fun getFileFromService(version: Int, fileId: String = "43", projectId: String = "0"): ByteString {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest: CosmasProto.GetVersionRequest =
-                CosmasProto.GetVersionRequest.newBuilder().
-                        setVersion(version).
-                        setFileId(fileId).
-                        setProjectId(projectId).
-                        build()
+                CosmasProto.GetVersionRequest.newBuilder().setVersion(version).setFileId(fileId).setProjectId(projectId).build()
         service.getVersion(getVersionRequest, getVersionRecorder)
         return getVersionRecorder.values[0].file
     }
@@ -64,11 +63,7 @@ class CosmasServiceTest {
     private fun addFileToService(text: String, fileId: String = "43", projectId: String = "0") {
         val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
         val newVersionRequest =
-                CosmasProto.CreateVersionRequest.newBuilder().
-                        setFileId(fileId).
-                        setProjectId(projectId).
-                        setFile(ByteString.copyFromUtf8(text)).
-                        build()
+                CosmasProto.CreateVersionRequest.newBuilder().setFileId(fileId).setProjectId(projectId).setFile(ByteString.copyFromUtf8(text)).build()
         service.createVersion(newVersionRequest, createVersionRecorder)
     }
 }

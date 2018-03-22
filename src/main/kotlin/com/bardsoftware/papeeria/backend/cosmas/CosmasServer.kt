@@ -14,9 +14,6 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
-import io.grpc.stub.StreamObserver
-import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser

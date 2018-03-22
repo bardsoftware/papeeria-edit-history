@@ -21,7 +21,9 @@ import io.grpc.stub.StreamObserver
  * Special class that can work with requests from client
  */
 class CosmasService : CosmasGrpc.CosmasImplBase() {
+
     private val files: HashMap<String, HashMap<String, ArrayList<ByteString>>> = HashMap()
+    
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version: ${request.version}")
@@ -54,10 +56,10 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
     }
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
-        if(files[request.projectId] == null) {
+        if (files[request.projectId] == null) {
             files[request.projectId] = HashMap()
         }
-        if(files[request.projectId]!![request.fileId] == null) {
+        if (files[request.projectId]!![request.fileId] == null) {
             files[request.projectId]!![request.fileId] = ArrayList()
         }
         val fileVersions = files[request.projectId]!![request.fileId]
