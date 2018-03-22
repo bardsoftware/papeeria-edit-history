@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
@@ -32,7 +31,6 @@ class CosmasClient(host: String, port: Int) {
             .usePlaintext(true)
             .build()
     private val blockingStub = newBlockingStub(channel)
-
 
     fun getVersion(version: Int) {
         println("Ask for version: $version")

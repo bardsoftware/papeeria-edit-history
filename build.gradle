@@ -1,7 +1,5 @@
 group 'com.bardsoftware.papeeria.backend.cosmas'
 version '1.0-SNAPSHOT'
-
-
 apply plugin: 'kotlin'
 apply plugin: 'com.google.protobuf'
 apply plugin: 'idea'

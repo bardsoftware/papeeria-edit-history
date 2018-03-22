@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-
 package com.bardsoftware.papeeria.backend.cosmas
 
 import io.grpc.stub.StreamObserver
@@ -51,7 +50,6 @@ class CosmasServer(port: Int) {
     }
 }
 
-
 fun main(args: Array<String>) {
     val arg = CosmasServerArgs(ArgParser(args))
     println("Try to bind in port ${arg.port}")
@@ -79,5 +77,5 @@ class CosmasImpl : CosmasImplBase() {
 }
 
 class CosmasServerArgs(parser: ArgParser) {
-    val port: Int by parser.storing("--port", help = "choose port") {toInt()}.default { 50051 }
+    val port: Int by parser.storing("--port", help = "choose port") { toInt() }.default { 50051 }
 }

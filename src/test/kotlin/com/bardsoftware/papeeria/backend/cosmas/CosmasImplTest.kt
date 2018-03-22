@@ -12,17 +12,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-
-
 package com.bardsoftware.papeeria.backend.cosmas
-
 
 import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
 
 /**
- * This is simple test to check that CosmasImpl class returns correct response
+ * This is simple test to check that CosmasImpl class returns correct response.
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasImplTest {
@@ -35,5 +32,4 @@ class CosmasImplTest {
         service.getVersion(request, recorder)
         assertEquals("ver1", recorder.values[0].text)
     }
-
 }
