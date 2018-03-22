@@ -14,17 +14,22 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
-import org.junit.Test
-
 import org.junit.Assert.*
+import org.junit.Test
+import io.grpc.internal.testing.StreamRecorder
 
 /**
- * This is simple test to check that generated CosmasProto class can be used.
+ * This is simple test to check that CosmasImpl class returns correct response.
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class ProtoTest {
+class CosmasImplTest {
     @Test
-    fun cosmasProtoHasBeenCompiled() {
-        assertNotNull(CosmasProto.GetVersionResponse.getDefaultInstance())
+    fun itGivesCorrectVersion() {
+        val service = CosmasImpl()
+        val request: CosmasProto.GetVersionRequest =
+                CosmasProto.GetVersionRequest.newBuilder().setVersion(1).build()
+        val recorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
+        service.getVersion(request, recorder)
+        assertEquals("ver1", recorder.values[0].text)
     }
 }
