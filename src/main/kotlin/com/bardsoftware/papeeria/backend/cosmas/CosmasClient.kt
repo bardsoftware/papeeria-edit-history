@@ -36,7 +36,7 @@ class CosmasClient(host: String, port: Int) {
         println("Ask for version: $version")
         val request: GetVersionRequest = GetVersionRequest.newBuilder().setVersion(version).build()
         val response: GetVersionResponse = blockingStub.getVersion(request)
-        println("Get text: ${response.text}")
+        println("Get text: ${response.file}")
     }
 
     @Throws(InterruptedException::class)
