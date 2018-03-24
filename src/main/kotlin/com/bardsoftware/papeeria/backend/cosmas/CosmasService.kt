@@ -22,47 +22,41 @@ import io.grpc.stub.StreamObserver
  */
 class CosmasService : CosmasGrpc.CosmasImplBase() {
 
-    private val files: HashMap<String, HashMap<String, ArrayList<ByteString>>> = HashMap()
-    
+    private val files = mutableMapOf<String, MutableList<ByteString>>()
+
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version: ${request.version}")
-        val response: CosmasProto.GetVersionResponse
-        response = if (!checkRequest(request)) {
-            println("Bad request")
-            CosmasProto.GetVersionResponse.newBuilder().build()
+        val response = CosmasProto.GetVersionResponse.newBuilder()
+        val fileVersions = files[request.fileId]
+        if (fileVersions != null &&
+                request.version < fileVersions.size &&
+                request.version >= 0) {
+            val file = fileVersions[request.version]
+            response.file = file
         } else {
-            val file = files[request.projectId]!![request.fileId]!![request.version]
-            CosmasProto.GetVersionResponse.newBuilder().setFile(file).build()
+            println("Bad request")
         }
-        responseObserver.onNext(response)
+        responseObserver.onNext(response.build())
         responseObserver.onCompleted()
-    }
-
-    private fun checkRequest(request: CosmasProto.GetVersionRequest): Boolean {
-        return files[request.projectId] != null &&
-                files[request.projectId]!![request.fileId] != null &&
-                request.version >= 0 &&
-                request.version < files[request.projectId]!![request.fileId]!!.size
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version")
         addNewVersion(request)
-        val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse.newBuilder().build()
+        val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse.
+                newBuilder().
+                build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
-        if (files[request.projectId] == null) {
-            files[request.projectId] = HashMap()
+        if (files[request.fileId] == null) {
+            files[request.fileId] = ArrayList()
         }
-        if (files[request.projectId]!![request.fileId] == null) {
-            files[request.projectId]!![request.fileId] = ArrayList()
-        }
-        val fileVersions = files[request.projectId]!![request.fileId]
+        val fileVersions = files[request.fileId]
         fileVersions?.add(request.file)
     }
 }
