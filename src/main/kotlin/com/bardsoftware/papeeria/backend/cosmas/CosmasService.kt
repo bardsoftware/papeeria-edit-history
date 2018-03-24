@@ -54,7 +54,7 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
         if (files[request.fileId] == null) {
-            files[request.fileId] = ArrayList()
+            files[request.fileId] = mutableListOf()
         }
         val fileVersions = files[request.fileId]
         fileVersions?.add(request.file)
