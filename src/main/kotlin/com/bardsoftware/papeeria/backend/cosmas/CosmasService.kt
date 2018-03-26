@@ -15,6 +15,8 @@ limitations under the License.
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.protobuf.ByteString
+import io.grpc.Status
+import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 
 /**
@@ -30,29 +32,34 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(files) {
             val fileVersions = files[request.fileId]
-            if (fileVersions != null &&
-                    request.version < fileVersions.size &&
-                    request.version >= 0) {
-                response.file = fileVersions[request.version]
+            val requestStatus = verifyGetVersionRequest(request)
+            if (requestStatus.isOk) {
+                response.file = fileVersions?.get(request.version)
             } else {
-                printErrorInRequest(request)
+                println("This request is incorrect: " + requestStatus.description)
+                responseObserver.onError(StatusException(requestStatus))
             }
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
 
-    private fun printErrorInRequest(request: CosmasProto.GetVersionRequest) {
-        print("This request is incorrect: ")
+    private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Status {
+        var status: Status = Status.OK
         val fileVersions = files[request.fileId]
         when {
             fileVersions == null ->
-                println("there is no file in storage with file id ${request.fileId}")
+                status = Status.INVALID_ARGUMENT.withDescription(
+                        "There is no file in storage with file id ${request.fileId}")
             request.version >= fileVersions.size ->
-                println("in storage file has ${fileVersions.size} versions, but you ask for version ${request.version}")
+                status = Status.OUT_OF_RANGE.withDescription(
+                        "In storage this file has ${fileVersions.size} versions, " +
+                                "but you ask for version ${request.version}")
             request.version < 0 ->
-                println("you ask for version ${request.version} that is negative")
+                status = Status.OUT_OF_RANGE.withDescription(
+                        "You ask for version ${request.version} that is negative")
         }
+        return status
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,

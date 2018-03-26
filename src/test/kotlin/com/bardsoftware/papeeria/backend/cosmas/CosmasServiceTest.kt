@@ -70,8 +70,19 @@ class CosmasServiceTest {
 
     @Test
     fun tryToGetFileWithWrongId() {
-        val file = getFileFromService(0, "43")
+        val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
+        val getVersionRequest = CosmasProto.GetVersionRequest
+                .newBuilder()
+                .setVersion(0)
+                .setFileId("1")
+                .setProjectId("1")
+                .build()
+        service.getVersion(getVersionRequest, getVersionRecorder)
+        val file = getVersionRecorder.values[0].file
         assertTrue(file.isEmpty)
+        assertNotNull(getVersionRecorder.error)
+        assertEquals("INVALID_ARGUMENT: There is no file in storage with file id 1",
+                getVersionRecorder.error!!.message)
     }
 
     @Test
@@ -80,7 +91,6 @@ class CosmasServiceTest {
         getFileFromService(1, "0")
         getFileFromService(-1, "0")
     }
-
 
     @Test
     fun addManyFilesAndManyVersions() {
@@ -106,8 +116,6 @@ class CosmasServiceTest {
         assertEquals("file4ver1", file4_1.toStringUtf8())
         assertEquals("file4ver2", file4_2.toStringUtf8())
     }
-
-
 
     private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
