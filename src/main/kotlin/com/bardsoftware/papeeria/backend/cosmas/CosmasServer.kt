@@ -14,9 +14,6 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
-import io.grpc.stub.StreamObserver
-import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
@@ -29,7 +26,7 @@ import com.xenomachina.argparser.default
 class CosmasServer(port: Int) {
     private val server: Server = ServerBuilder
             .forPort(port)
-            .addService(CosmasImpl())
+            .addService(CosmasService())
             .build()
 
     fun start() {
@@ -57,23 +54,6 @@ fun main(args: Array<String>) {
     println("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
-}
-
-/**
- * Special class that can work with request from client
- */
-class CosmasImpl : CosmasImplBase() {
-    private val textVersions = arrayOf("ver0", "ver1", "ver2")
-    override fun getVersion(request: GetVersionRequest,
-                            responseObserver: StreamObserver<GetVersionResponse>) {
-        val version = request.version
-        println("Get request for version: $version")
-        val response: GetVersionResponse =
-                GetVersionResponse.newBuilder().setText(textVersions[version]).build()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
-        println("Send back text: ${textVersions[version]}")
-    }
 }
 
 class CosmasServerArgs(parser: ArgParser) {

@@ -16,6 +16,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGrpc.*
+import com.google.protobuf.ByteString
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import io.grpc.ManagedChannel
@@ -27,16 +28,32 @@ import java.util.concurrent.TimeUnit
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasClient(host: String, port: Int) {
+
     private val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port)
             .usePlaintext(true)
             .build()
+
     private val blockingStub = newBlockingStub(channel)
 
     fun getVersion(version: Int) {
         println("Ask for version: $version")
-        val request: GetVersionRequest = GetVersionRequest.newBuilder().setVersion(version).build()
+        addText()
+        val request: GetVersionRequest = GetVersionRequest.newBuilder()
+                .setVersion(version)
+                .setProjectId("0")
+                .setFileId("43")
+                .build()
         val response: GetVersionResponse = blockingStub.getVersion(request)
-        println("Get text: ${response.text}")
+        println("Get file: ${response.file.toStringUtf8()}")
+    }
+
+    private fun addText() {
+        val request = CreateVersionRequest.newBuilder()
+                .setProjectId("0")
+                .setFileId("43")
+                .setFile(ByteString.copyFromUtf8("ver0"))
+                .build()
+        blockingStub.createVersion(request)
     }
 
     @Throws(InterruptedException::class)
