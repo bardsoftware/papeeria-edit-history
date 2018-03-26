@@ -38,21 +38,21 @@ class CosmasClient(host: String, port: Int) {
     fun getVersion(version: Int) {
         println("Ask for version: $version")
         addText()
-        val request: GetVersionRequest = GetVersionRequest.newBuilder().
-                setVersion(version).
-                setProjectId("0").
-                setFileId("43").
-                build()
+        val request: GetVersionRequest = GetVersionRequest.newBuilder()
+                .setVersion(version)
+                .setProjectId("0")
+                .setFileId("43")
+                .build()
         val response: GetVersionResponse = blockingStub.getVersion(request)
         println("Get file: ${response.file.toStringUtf8()}")
     }
 
     private fun addText() {
-        val request = CreateVersionRequest.newBuilder().
-                setProjectId("0").
-                setFileId("43").
-                setFile(ByteString.copyFromUtf8("ver0")).
-                build()
+        val request = CreateVersionRequest.newBuilder()
+                .setProjectId("0")
+                .setFileId("43")
+                .setFile(ByteString.copyFromUtf8("ver0"))
+                .build()
         blockingStub.createVersion(request)
     }
 

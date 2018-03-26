@@ -75,6 +75,14 @@ class CosmasServiceTest {
     }
 
     @Test
+    fun tryToGetFileWithWrongVersion() {
+        addFileToService("file")
+        getFileFromService(1, "0")
+        getFileFromService(-1, "0")
+    }
+
+
+    @Test
     fun addManyFilesAndManyVersions() {
         addFileToService("file1", "1")
         addFileToService("file2", "2")
@@ -97,30 +105,30 @@ class CosmasServiceTest {
         assertEquals("file2ver1", file2_1.toStringUtf8())
         assertEquals("file4ver1", file4_1.toStringUtf8())
         assertEquals("file4ver2", file4_2.toStringUtf8())
-
-
     }
+
+
 
     private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
-        val getVersionRequest = CosmasProto.GetVersionRequest.
-                newBuilder().
-                setVersion(version).
-                setFileId(fileId).
-                setProjectId(projectId).
-                build()
+        val getVersionRequest = CosmasProto.GetVersionRequest
+                .newBuilder()
+                .setVersion(version)
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .build()
         service.getVersion(getVersionRequest, getVersionRecorder)
         return getVersionRecorder.values[0].file
     }
 
     private fun addFileToService(text: String, fileId: String = "0", projectId: String = "0") {
         val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.CreateVersionRequest.
-                newBuilder().
-                setFileId(fileId).
-                setProjectId(projectId).
-                setFile(ByteString.copyFromUtf8(text)).
-                build()
+        val newVersionRequest = CosmasProto.CreateVersionRequest
+                .newBuilder()
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .setFile(ByteString.copyFromUtf8(text))
+                .build()
         service.createVersion(newVersionRequest, createVersionRecorder)
     }
 }

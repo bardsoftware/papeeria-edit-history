@@ -32,31 +32,41 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
         if (fileVersions != null &&
                 request.version < fileVersions.size &&
                 request.version >= 0) {
-            val file = fileVersions[request.version]
-            response.file = file
+            response.file = fileVersions[request.version]
         } else {
-            println("Bad request")
+            printErrorInRequest(request)
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
+    }
+
+    private fun printErrorInRequest(request: CosmasProto.GetVersionRequest) {
+        print("This request is bad: ")
+        val fileVersions = files[request.fileId]
+        when {
+            fileVersions == null ->
+                println("there is no file in storage with file id ${request.fileId}")
+            request.version >= fileVersions.size ->
+                println("in storage file has ${fileVersions.size} versions, but you ask for version ${request.version}")
+            request.version < 0 ->
+                println("you ask for version ${request.version} that is negative")
+        }
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version")
         addNewVersion(request)
-        val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse.
-                newBuilder().
-                build()
+        val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
+                .newBuilder()
+                .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
-        if (files[request.fileId] == null) {
-            files[request.fileId] = mutableListOf()
-        }
-        val fileVersions = files[request.fileId]
-        fileVersions?.add(request.file)
+        val fileVersions = files[request.fileId] ?: mutableListOf()
+        fileVersions.add(request.file)
+        files[request.fileId] = fileVersions
     }
 }
