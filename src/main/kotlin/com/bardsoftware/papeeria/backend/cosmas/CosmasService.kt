@@ -28,20 +28,22 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version: ${request.version}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
-        val fileVersions = files[request.fileId]
-        if (fileVersions != null &&
-                request.version < fileVersions.size &&
-                request.version >= 0) {
-            response.file = fileVersions[request.version]
-        } else {
-            printErrorInRequest(request)
+        synchronized(files) {
+            val fileVersions = files[request.fileId]
+            if (fileVersions != null &&
+                    request.version < fileVersions.size &&
+                    request.version >= 0) {
+                response.file = fileVersions[request.version]
+            } else {
+                printErrorInRequest(request)
+            }
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
 
     private fun printErrorInRequest(request: CosmasProto.GetVersionRequest) {
-        print("This request is bad: ")
+        print("This request is incorrect: ")
         val fileVersions = files[request.fileId]
         when {
             fileVersions == null ->
@@ -65,8 +67,10 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
     }
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
-        val fileVersions = files[request.fileId] ?: mutableListOf()
-        fileVersions.add(request.file)
-        files[request.fileId] = fileVersions
+        synchronized(files) {
+            val fileVersions = files[request.fileId] ?: mutableListOf()
+            fileVersions.add(request.file)
+            files[request.fileId] = fileVersions
+        }
     }
 }
