@@ -26,11 +26,11 @@ import org.junit.Before
  */
 class CosmasServiceTest {
 
-    private var service = CosmasService()
+    private var service = CosmasInMemoryService()
 
     @Before
     fun testInitialization() {
-        service = CosmasService()
+        service = CosmasInMemoryService()
     }
 
     @Test

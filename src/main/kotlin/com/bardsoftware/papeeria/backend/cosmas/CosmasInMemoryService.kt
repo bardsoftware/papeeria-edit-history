@@ -22,7 +22,7 @@ import io.grpc.stub.StreamObserver
 /**
  * Special class that can work with requests from client
  */
-class CosmasService : CosmasGrpc.CosmasImplBase() {
+class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 

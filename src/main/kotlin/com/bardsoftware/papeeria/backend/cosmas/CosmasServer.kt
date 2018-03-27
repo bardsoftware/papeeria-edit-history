@@ -23,10 +23,10 @@ import com.xenomachina.argparser.default
  * Simple server that will wait for request and will send response back
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasServer(port: Int) {
+class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
     private val server: Server = ServerBuilder
             .forPort(port)
-            .addService(CosmasService())
+            .addService(service)
             .build()
 
     fun start() {
@@ -50,7 +50,11 @@ class CosmasServer(port: Int) {
 fun main(args: Array<String>) {
     val arg = CosmasServerArgs(ArgParser(args))
     println("Try to bind in port ${arg.port}")
-    val server = CosmasServer(arg.port)
+    val server =
+            if (arg.bucket != "")
+                CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
+            else
+                CosmasServer(arg.port, CosmasInMemoryService())
     println("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
@@ -58,4 +62,5 @@ fun main(args: Array<String>) {
 
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port", help = "choose port") { toInt() }.default { 50051 }
+    val bucket: String by parser.storing("--bucket", help = "choose bucket")
 }

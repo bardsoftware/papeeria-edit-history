@@ -6,7 +6,7 @@ apply plugin: 'idea'
 apply plugin: 'application'
 
 buildscript {
-    ext.kotlin_version = '1.2.30'
+    ext.kotlin_version = '1.2.31'
 
     repositories {
         mavenCentral()
@@ -43,6 +43,8 @@ dependencies {
     compile "io.grpc:grpc-netty:1.+"
     compile "io.grpc:grpc-testing:1.+"
     compile "com.xenomachina:kotlin-argparser:2.0.4"
+    compile 'com.google.cloud:google-cloud-storage:1.14.0'
+    compile 'com.google.cloud:google-cloud-datastore:1.23.0'
 }
 
 protobuf {
