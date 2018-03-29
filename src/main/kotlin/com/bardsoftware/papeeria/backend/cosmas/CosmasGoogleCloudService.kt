@@ -14,39 +14,49 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
-import com.google.cloud.Timestamp
-import com.google.cloud.datastore.*
-import com.xenomachina.argparser.ArgParser
-import com.xenomachina.argparser.default
-import javax.swing.UIManager.put
-import com.google.cloud.datastore.TransactionExceptionHandler.build
-import com.google.protobuf.ByteString
+import com.google.cloud.storage.*
 import io.grpc.stub.StreamObserver
-import sun.security.rsa.RSAPrivateCrtKeyImpl.newKey
-import com.google.cloud.storage.BlobInfo
-import com.google.cloud.storage.BlobId
-import com.google.cloud.storage.Storage
+import com.google.cloud.storage.Acl.User
+import com.google.protobuf.ByteString
+import io.grpc.Status
+import io.grpc.StatusException
+import java.util.Arrays
+import java.util.ArrayList
 
+class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.CosmasImplBase() {
 
-class CosmasGoogleCloudService(private val bucketName: String): CosmasGrpc.CosmasImplBase() {
+    private val storage: Storage = StorageOptions.getDefaultInstance().service
 
-    val datastore = DatastoreOptions.getDefaultInstance().getService()
-
-    //val keyFactory = datastore.newKeyFactory().setKind("File")
-
-    override fun getVersion(request: CosmasProto.GetVersionRequest, responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
+    override fun createVersion(request: CosmasProto.CreateVersionRequest,
+                               responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
+        val blobInfo = storage.create(
+                BlobInfo.newBuilder(bucketName, request.fileId)
+                        // Modify access list to allow all users with link to read file
+                        .setAcl(ArrayList(Arrays.asList(Acl.of(User.ofAllUsers(), Acl.Role.READER))))
+                        .build(),
+                request.file.toByteArray())
+        println(blobInfo.mediaLink)
+        val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
+                .newBuilder()
+                .build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
 
     }
 
-
-    override fun createVersion(request: CosmasProto.CreateVersionRequest, responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        val key = datastore.allocateId(keyFactory.newKey())
-        val blob: Blob = Blob(request.file)
-        val task = Entity.newBuilder(key)
-                .set("description", Blob(request.file))
-                .set("created", Timestamp.now())
-                .build()
-        datastore.put(task)
+    override fun getVersion(request: CosmasProto.GetVersionRequest,
+                            responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
+        val blob = storage.get(BlobInfo.newBuilder(bucketName, request.fileId).build().blobId)
+        val response = CosmasProto.GetVersionResponse.newBuilder()
+        if(blob != null) {
+            response.file = ByteString.copyFrom(blob.getContent())
+        } else {
+            val requestStatus = Status.NOT_FOUND.withDescription("There is no such file in storage")
+            println(println("This request is incorrect: " + requestStatus.description))
+            responseObserver.onError(StatusException(requestStatus))
+        }
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
     }
 
 }

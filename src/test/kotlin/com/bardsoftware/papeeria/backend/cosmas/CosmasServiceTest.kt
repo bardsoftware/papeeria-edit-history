@@ -24,13 +24,13 @@ import org.junit.Before
  * This is some tests for CosmasService class
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasServiceTest {
+class CosmasInMemoryServiceTest {
 
-    private var service = CosmasInMemoryService()
+    private var service = CosmasService()
 
     @Before
     fun testInitialization() {
-        service = CosmasInMemoryService()
+        service = CosmasService()
     }
 
     @Test
