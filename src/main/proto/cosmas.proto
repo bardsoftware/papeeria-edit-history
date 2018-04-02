@@ -18,14 +18,28 @@ syntax = "proto3";
 option java_package = "com.bardsoftware.papeeria.backend.cosmas";
 option java_outer_classname = "CosmasProto";
 
-message GetVersionResponse {
-    string text = 1;
+message GetVersionRequest {
+    string projectId = 1;
+    string fileId = 2;
+    int32 version = 3;
 }
 
-message GetVersionRequest {
-    int32 version = 1;
+message GetVersionResponse {
+    bytes file = 1;
+}
+
+message CreateVersionRequest {
+    string projectId = 1;
+    string fileId = 2;
+    bytes file = 3;
+}
+
+message CreateVersionResponse {
 }
 
 service Cosmas {
-    rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {}
+    rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
+    }
+    rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
+    }
 }
