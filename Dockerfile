@@ -1,7 +1,8 @@
-FROM openjdk:8-jdk
+FROM openjdk:8-slim
 
-ENV FILE_NAME distZip
+ENV DIR_NAME Cosmas-1.0-SNAPSHOT
 
-ADD ./build/distributions/${FILE_NAME}.jar  ./${FILE_NAME}.jar
+ADD ./build/distributions/${DIR_NAME}.zip  ./${DIR_NAME}.zip
 
-ENTRYPOINT java -jar ${FILE_NAME}.jar 
+RUN unzip -n ${DIR_NAME}.zip
+ENTRYPOINT ./${DIR_NAME}/bin/cosmas-server
