@@ -20,7 +20,8 @@ import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 
 /**
- * Simple server that will wait for request and will send response back
+ * Simple server that will wait for request and will send response back.
+ * It uses CosmasGoogleCloudService or CosmasInMemoryService to store files
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {

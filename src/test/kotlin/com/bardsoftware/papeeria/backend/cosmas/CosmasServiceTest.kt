@@ -19,18 +19,18 @@ import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
 import org.junit.Before
-
 /**
  * This is some tests for CosmasService class
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasInMemoryServiceTest {
 
-    private var service = CosmasService()
+    private var service = CosmasInMemoryService()
 
     @Before
     fun testInitialization() {
-        service = CosmasService()
+        service = CosmasInMemoryService()
+        println()
     }
 
     @Test

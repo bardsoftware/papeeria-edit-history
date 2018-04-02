@@ -86,3 +86,9 @@ applicationDistribution.into('bin') {
     from(cosmasServer)
     fileMode = 0755
 }
+
+test {
+    testLogging {
+        showStandardStreams = true
+    }
+}

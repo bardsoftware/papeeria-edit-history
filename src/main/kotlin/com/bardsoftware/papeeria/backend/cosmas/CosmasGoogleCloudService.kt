@@ -23,40 +23,50 @@ import io.grpc.StatusException
 import java.util.Arrays
 import java.util.ArrayList
 
+/**
+ * Special class that can work with requests from CosmasClient
+ * This realization stores files in Google Cloud Storage.
+ *
+ * @author Aleksandr Fedotov (iisuslik43)
+ */
 class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.CosmasImplBase() {
 
     private val storage: Storage = StorageOptions.getDefaultInstance().service
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        val blobInfo = storage.create(
+        println("Get request for create new version of file № ${request.fileId}")
+        storage.create(
                 BlobInfo.newBuilder(bucketName, request.fileId)
                         // Modify access list to allow all users with link to read file
                         .setAcl(ArrayList(Arrays.asList(Acl.of(User.ofAllUsers(), Acl.Role.READER))))
                         .build(),
                 request.file.toByteArray())
-        println(blobInfo.mediaLink)
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
                 .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
-
     }
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
+        println("Get request for version ${request.version} file № ${request.fileId}")
         val blob = storage.get(BlobInfo.newBuilder(bucketName, request.fileId).build().blobId)
         val response = CosmasProto.GetVersionResponse.newBuilder()
-        if(blob != null) {
+        if (blob != null) {
             response.file = ByteString.copyFrom(blob.getContent())
         } else {
             val requestStatus = Status.NOT_FOUND.withDescription("There is no such file in storage")
-            println(println("This request is incorrect: " + requestStatus.description))
+            println("This request is incorrect: " + requestStatus.description)
             responseObserver.onError(StatusException(requestStatus))
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
 
+    fun deleteFile(fileId: String) {
+        println("Delete file № $fileId")
+        storage.delete(BlobInfo.newBuilder(bucketName, fileId).build().blobId)
+    }
 }

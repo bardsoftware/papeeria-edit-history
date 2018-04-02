@@ -20,7 +20,10 @@ import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 
 /**
- * Special class that can work with requests from client
+ * Special class that can work with requests from CosmasClient.
+ * This realization stores files in RAM.
+ *
+ * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
@@ -28,7 +31,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        println("Get request for version: ${request.version}")
+        println("Get request for version ${request.version} file № ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(files) {
             val fileVersions = files[request.fileId]
@@ -64,7 +67,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        println("Get request for create new version")
+        println("Get request for create new version of file № ${request.fileId}")
         addNewVersion(request)
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
