@@ -20,33 +20,36 @@ import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 
 /**
- * Special class that can work with requests from client
+ * Special class that can work with requests from CosmasClient.
+ * This realization stores files in RAM.
+ *
+ * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasService : CosmasGrpc.CosmasImplBase() {
+class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        println("Get request for version: ${request.version}")
+        println("Get request for version ${request.version} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
-        synchronized(files) {
-            val fileVersions = files[request.fileId]
+        synchronized(this.files) {
+            val fileVersions = this.files[request.fileId]
             val requestStatus = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
                 response.file = fileVersions?.get(request.version)
+                responseObserver.onNext(response.build())
+                responseObserver.onCompleted()
             } else {
                 println("This request is incorrect: " + requestStatus.description)
                 responseObserver.onError(StatusException(requestStatus))
             }
         }
-        responseObserver.onNext(response.build())
-        responseObserver.onCompleted()
     }
 
     private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Status {
         var status: Status = Status.OK
-        val fileVersions = files[request.fileId]
+        val fileVersions = this.files[request.fileId]
         when {
             fileVersions == null ->
                 status = Status.INVALID_ARGUMENT.withDescription(
@@ -64,7 +67,7 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        println("Get request for create new version")
+        println("Get request for create new version of file # ${request.fileId}")
         addNewVersion(request)
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
@@ -74,10 +77,10 @@ class CosmasService : CosmasGrpc.CosmasImplBase() {
     }
 
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
-        synchronized(files) {
-            val fileVersions = files[request.fileId] ?: mutableListOf()
+        synchronized(this.files) {
+            val fileVersions = this.files[request.fileId] ?: mutableListOf()
             fileVersions.add(request.file)
-            files[request.fileId] = fileVersions
+            this.files[request.fileId] = fileVersions
         }
     }
 }
