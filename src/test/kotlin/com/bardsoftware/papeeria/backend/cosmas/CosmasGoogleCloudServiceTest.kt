@@ -14,6 +14,7 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
 import org.junit.Assert.*
@@ -27,7 +28,7 @@ import org.junit.Test
  */
 class CosmasGoogleCloudServiceTest {
 
-    private var service = CosmasGoogleCloudService.getServiceForTests()
+    private var service = getServiceForTests()
 
     @Before
     fun testInitialization() {
@@ -99,5 +100,10 @@ class CosmasGoogleCloudServiceTest {
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
         service.createVersion(newVersionRequest, createVersionRecorder)
+    }
+
+    private fun getServiceForTests(): CosmasGoogleCloudService {
+        return CosmasGoogleCloudService("papeeria-interns-cosmas",
+                LocalStorageHelper.getOptions().service)
     }
 }

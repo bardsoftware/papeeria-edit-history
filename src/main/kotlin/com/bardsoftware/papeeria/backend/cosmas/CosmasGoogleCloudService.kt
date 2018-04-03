@@ -30,13 +30,8 @@ import java.util.ArrayList
  *
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.CosmasImplBase() {
-
-    private var storage: Storage = StorageOptions.getDefaultInstance().service
-
-    private constructor(bucketName: String, storage: Storage) : this(bucketName) {
-        this.storage = storage
-    }
+class CosmasGoogleCloudService(private val bucketName: String,
+                               private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
@@ -85,13 +80,6 @@ class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.Cosm
             this.storage.delete(BlobInfo.newBuilder(this.bucketName, fileId).build().blobId)
         } catch (e: StorageException) {
             println("Deleting file failed: ${e.message}")
-        }
-    }
-
-    companion object {
-        fun getServiceForTests(): CosmasGoogleCloudService {
-            return CosmasGoogleCloudService("papeeria-interns-cosmas",
-                    LocalStorageHelper.getOptions().service)
         }
     }
 }

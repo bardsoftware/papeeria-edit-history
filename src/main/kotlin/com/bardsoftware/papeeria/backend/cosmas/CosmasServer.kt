@@ -63,6 +63,6 @@ fun main(args: Array<String>) {
 }
 
 class CosmasServerArgs(parser: ArgParser) {
-    val port: Int by parser.storing("--port", help = "choose port that server will hear") { toInt() }.default { 50051 }
+    val port: Int by parser.storing("--port", help = "choose port that server will listen to") { toInt() }.default { 50051 }
     val bucket: String by parser.storing("--bucket", help = "choose Google Cloud bucket for files storing")
 }
