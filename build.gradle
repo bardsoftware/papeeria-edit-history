@@ -45,6 +45,7 @@ dependencies {
     compile "com.xenomachina:kotlin-argparser:2.0.4"
     compile 'com.google.cloud:google-cloud-storage:1.14.0'
     compile 'com.google.cloud:google-cloud-datastore:1.23.0'
+    compile 'com.google.cloud:google-cloud-nio:0.42.1-alpha'
 }
 
 protobuf {

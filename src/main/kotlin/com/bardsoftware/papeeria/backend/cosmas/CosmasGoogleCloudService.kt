@@ -17,6 +17,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 import com.google.cloud.storage.*
 import io.grpc.stub.StreamObserver
 import com.google.cloud.storage.Acl.User
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
@@ -31,7 +32,7 @@ import java.util.ArrayList
  */
 class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.CosmasImplBase() {
 
-    private val storage: Storage = StorageOptions.getDefaultInstance().service
+    private var storage: Storage = StorageOptions.getDefaultInstance().service
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
@@ -68,5 +69,16 @@ class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.Cosm
     fun deleteFile(fileId: String) {
         println("Delete file № $fileId")
         storage.delete(BlobInfo.newBuilder(bucketName, fileId).build().blobId)
+    }
+
+    companion object {
+        fun getServiceForTests(): CosmasGoogleCloudService {
+            return CosmasGoogleCloudService("papeeria-interns-cosmas",
+                    LocalStorageHelper.getOptions().service)
+        }
+    }
+
+    private constructor(bucketName: String, testStorage: Storage) : this(bucketName) {
+        storage = testStorage
     }
 }

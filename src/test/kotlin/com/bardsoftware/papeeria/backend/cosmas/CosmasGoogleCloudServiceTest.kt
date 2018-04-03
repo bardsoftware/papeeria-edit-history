@@ -27,7 +27,7 @@ import org.junit.Test
  */
 class CosmasGoogleCloudServiceTest {
 
-    private var service = CosmasGoogleCloudService("papeeria-interns-cosmas")
+    private var service = CosmasGoogleCloudService.getServiceForTests()
 
     @Before
     fun testInitialization() {
