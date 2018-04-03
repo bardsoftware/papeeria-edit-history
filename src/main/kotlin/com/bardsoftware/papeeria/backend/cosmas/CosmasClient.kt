@@ -33,7 +33,7 @@ class CosmasClient(host: String, port: Int) {
             .usePlaintext(true)
             .build()
 
-    private val blockingStub = newBlockingStub(channel)
+    private val blockingStub = newBlockingStub(this.channel)
 
     fun getVersion(version: Int) {
         println("Ask for version: $version")
@@ -43,7 +43,7 @@ class CosmasClient(host: String, port: Int) {
                 .setProjectId("0")
                 .setFileId("43")
                 .build()
-        val response: GetVersionResponse = blockingStub.getVersion(request)
+        val response: GetVersionResponse = this.blockingStub.getVersion(request)
         println("Get file: ${response.file.toStringUtf8()}")
     }
 
@@ -53,7 +53,7 @@ class CosmasClient(host: String, port: Int) {
                 .setFileId("43")
                 .setFile(ByteString.copyFromUtf8("ver0"))
                 .build()
-        blockingStub.createVersion(request)
+        this.blockingStub.createVersion(request)
     }
 
     @Throws(InterruptedException::class)
@@ -75,8 +75,8 @@ fun main(args: Array<String>) {
 }
 
 class CosmasClientArgs(parser: ArgParser) {
-    val serverPort: Int by parser.storing("--server-port", help = "choose server port")
+    val serverPort: Int by parser.storing("--server-port", help = "choose port of server where client will send requests")
     { toInt() }.default { 50051 }
-    val serverHost: String by parser.storing("--server-host", help = "choose server host")
+    val serverHost: String by parser.storing("--server-host", help = "choose host of server where client will send requests")
             .default { "localhost" }
 }

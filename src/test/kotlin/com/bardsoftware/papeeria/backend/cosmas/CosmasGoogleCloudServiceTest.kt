@@ -37,18 +37,20 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun addFileAndGetFile() {
         addFileToService("file", "43")
-        var file = getFileFromService(0, "43")
+        val file = getFileFromService(0, "43")
         assertFalse(file.isEmpty)
         assertEquals("file", file.toStringUtf8())
         service.deleteFile("43")
-        file = getFileFromService(0, "43")
-        assertTrue(file.isEmpty)
+        val stream = getStreamRecorderWithResult(0, "43")
+        assertEquals(0, stream.values.size)
+        assertNotNull(stream.error)
     }
 
     @Test
     fun getFileThatNotExists() {
-        val file = getFileFromService(0, "43")
-        assertTrue(file.isEmpty)
+        val stream = getStreamRecorderWithResult(0, "43")
+        assertEquals(0, stream.values.size)
+        assertNotNull(stream.error)
     }
 
     @Test
@@ -63,13 +65,20 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("file2", file2.toStringUtf8())
         service.deleteFile("1")
         service.deleteFile("2")
-        file1 = getFileFromService(0, "1")
-        file2 = getFileFromService(0, "2")
-        assertTrue(file1.isEmpty)
-        assertTrue(file2.isEmpty)
+        val stream1 = getStreamRecorderWithResult(0, "1")
+        assertEquals(0, stream1.values.size)
+        assertNotNull(stream1.error)
+        val stream2 = getStreamRecorderWithResult(0, "2")
+        assertEquals(0, stream2.values.size)
+        assertNotNull(stream2.error)
     }
 
     private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
+        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
+    }
+
+    private fun getStreamRecorderWithResult(version: Int, fileId: String = "0", projectId: String = "0"):
+            StreamRecorder<CosmasProto.GetVersionResponse> {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = CosmasProto.GetVersionRequest
                 .newBuilder()
@@ -78,7 +87,7 @@ class CosmasGoogleCloudServiceTest {
                 .setProjectId(projectId)
                 .build()
         service.getVersion(getVersionRequest, getVersionRecorder)
-        return getVersionRecorder.values[0].file
+        return getVersionRecorder
     }
 
     private fun addFileToService(text: String, fileId: String = "0", projectId: String = "0") {

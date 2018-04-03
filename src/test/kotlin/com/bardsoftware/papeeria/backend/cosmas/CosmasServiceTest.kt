@@ -18,7 +18,9 @@ import com.google.protobuf.ByteString
 import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
+import io.grpc.stub.StreamObserver
 import org.junit.Before
+
 /**
  * This is some tests for CosmasService class
  * @author Aleksandr Fedotov (iisuslik43)
@@ -70,16 +72,8 @@ class CosmasInMemoryServiceTest {
 
     @Test
     fun tryToGetFileWithWrongId() {
-        val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
-        val getVersionRequest = CosmasProto.GetVersionRequest
-                .newBuilder()
-                .setVersion(0)
-                .setFileId("1")
-                .setProjectId("1")
-                .build()
-        service.getVersion(getVersionRequest, getVersionRecorder)
-        val file = getVersionRecorder.values[0].file
-        assertTrue(file.isEmpty)
+        val getVersionRecorder = getStreamRecorderWithResult(0, "1")
+        assertEquals(0, getVersionRecorder.values.size)
         assertNotNull(getVersionRecorder.error)
         assertEquals("INVALID_ARGUMENT: There is no file in storage with file id 1",
                 getVersionRecorder.error!!.message)
@@ -88,8 +82,12 @@ class CosmasInMemoryServiceTest {
     @Test
     fun tryToGetFileWithWrongVersion() {
         addFileToService("file")
-        getFileFromService(1, "0")
-        getFileFromService(-1, "0")
+        val getVersionRecorder1 = getStreamRecorderWithResult(1, "0")
+        val getVersionRecorder2 = getStreamRecorderWithResult(-1, "0")
+        assertEquals(0, getVersionRecorder1.values.size)
+        assertEquals(0, getVersionRecorder2.values.size)
+        assertNotNull(getVersionRecorder1.error)
+        assertNotNull(getVersionRecorder2.error)
     }
 
     @Test
@@ -118,6 +116,11 @@ class CosmasInMemoryServiceTest {
     }
 
     private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
+        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
+    }
+
+    private fun getStreamRecorderWithResult(version: Int, fileId: String = "0", projectId: String = "0"):
+            StreamRecorder<CosmasProto.GetVersionResponse> {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = CosmasProto.GetVersionRequest
                 .newBuilder()
@@ -126,7 +129,7 @@ class CosmasInMemoryServiceTest {
                 .setProjectId(projectId)
                 .build()
         service.getVersion(getVersionRequest, getVersionRecorder)
-        return getVersionRecorder.values[0].file
+        return getVersionRecorder
     }
 
     private fun addFileToService(text: String, fileId: String = "0", projectId: String = "0") {

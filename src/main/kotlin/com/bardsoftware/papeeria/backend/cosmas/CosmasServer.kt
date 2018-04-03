@@ -31,7 +31,7 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
             .build()
 
     fun start() {
-        server.start()
+        this.server.start()
         Runtime.getRuntime().addShutdownHook(object : Thread() {
             override fun run() {
                 this@CosmasServer.stop()
@@ -40,11 +40,11 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
     }
 
     private fun stop() {
-        server.shutdown()
+        this.server.shutdown()
     }
 
     fun blockUntilShutDown() {
-        server.awaitTermination()
+        this.server.awaitTermination()
     }
 }
 
@@ -52,16 +52,17 @@ fun main(args: Array<String>) {
     val arg = CosmasServerArgs(ArgParser(args))
     println("Try to bind in port ${arg.port}")
     val server =
-            if (arg.bucket != "")
+            if (arg.bucket != "") {
                 CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
-            else
+            } else {
                 CosmasServer(arg.port, CosmasInMemoryService())
+            }
     println("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
 }
 
 class CosmasServerArgs(parser: ArgParser) {
-    val port: Int by parser.storing("--port", help = "choose port") { toInt() }.default { 50051 }
-    val bucket: String by parser.storing("--bucket", help = "choose bucket")
+    val port: Int by parser.storing("--port", help = "choose port that server will hear") { toInt() }.default { 50051 }
+    val bucket: String by parser.storing("--bucket", help = "choose Google Cloud bucket for files storing")
 }

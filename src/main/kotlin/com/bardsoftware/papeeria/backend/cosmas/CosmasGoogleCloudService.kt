@@ -34,15 +34,22 @@ class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.Cosm
 
     private var storage: Storage = StorageOptions.getDefaultInstance().service
 
+    private constructor(bucketName: String, storage: Storage) : this(bucketName) {
+        this.storage = storage
+    }
+
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        println("Get request for create new version of file № ${request.fileId}")
-        storage.create(
-                BlobInfo.newBuilder(bucketName, request.fileId)
-                        // Modify access list to allow all users with link to read file
-                        .setAcl(ArrayList(Arrays.asList(Acl.of(User.ofAllUsers(), Acl.Role.READER))))
-                        .build(),
-                request.file.toByteArray())
+        println("Get request for create new version of file # ${request.fileId}")
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(this.bucketName, request.fileId).build(),
+                    request.file.toByteArray())
+        } catch (e: StorageException) {
+            println("StorageException happened: ${e.message}")
+            responseObserver.onError(e)
+            return
+        }
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
                 .build()
@@ -52,23 +59,33 @@ class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.Cosm
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        println("Get request for version ${request.version} file № ${request.fileId}")
-        val blob = storage.get(BlobInfo.newBuilder(bucketName, request.fileId).build().blobId)
+        println("Get request for version ${request.version} file # ${request.fileId}")
+        val blob: Blob? = try {
+            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.fileId).build().blobId)
+        } catch (e: StorageException) {
+            println("StorageException happened: ${e.message}")
+            responseObserver.onError(e)
+            return
+        }
         val response = CosmasProto.GetVersionResponse.newBuilder()
         if (blob != null) {
             response.file = ByteString.copyFrom(blob.getContent())
+            responseObserver.onNext(response.build())
+            responseObserver.onCompleted()
         } else {
             val requestStatus = Status.NOT_FOUND.withDescription("There is no such file in storage")
             println("This request is incorrect: " + requestStatus.description)
             responseObserver.onError(StatusException(requestStatus))
         }
-        responseObserver.onNext(response.build())
-        responseObserver.onCompleted()
     }
 
     fun deleteFile(fileId: String) {
-        println("Delete file № $fileId")
-        storage.delete(BlobInfo.newBuilder(bucketName, fileId).build().blobId)
+        println("Delete file # $fileId")
+        try {
+            this.storage.delete(BlobInfo.newBuilder(this.bucketName, fileId).build().blobId)
+        } catch (e: StorageException) {
+            println("Deleting file failed: ${e.message}")
+        }
     }
 
     companion object {
@@ -76,9 +93,5 @@ class CosmasGoogleCloudService(private val bucketName: String) : CosmasGrpc.Cosm
             return CosmasGoogleCloudService("papeeria-interns-cosmas",
                     LocalStorageHelper.getOptions().service)
         }
-    }
-
-    private constructor(bucketName: String, testStorage: Storage) : this(bucketName) {
-        storage = testStorage
     }
 }
