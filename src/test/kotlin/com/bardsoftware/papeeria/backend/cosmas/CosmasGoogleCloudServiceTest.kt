@@ -41,7 +41,7 @@ class CosmasGoogleCloudServiceTest {
         val file = getFileFromService(0, "43")
         assertFalse(file.isEmpty)
         assertEquals("file", file.toStringUtf8())
-        service.deleteFile("43")
+        this.service.deleteFile("43")
         val stream = getStreamRecorderWithResult(0, "43")
         assertEquals(0, stream.values.size)
         assertNotNull(stream.error)
@@ -58,14 +58,14 @@ class CosmasGoogleCloudServiceTest {
     fun addTwoFiles() {
         addFileToService("file1", "1")
         addFileToService("file2", "2")
-        var file1 = getFileFromService(0, "1")
-        var file2 = getFileFromService(0, "2")
+        val file1 = getFileFromService(0, "1")
+        val file2 = getFileFromService(0, "2")
         assertFalse(file1.isEmpty)
         assertFalse(file2.isEmpty)
         assertEquals("file1", file1.toStringUtf8())
         assertEquals("file2", file2.toStringUtf8())
-        service.deleteFile("1")
-        service.deleteFile("2")
+        this.service.deleteFile("1")
+        this.service.deleteFile("2")
         val stream1 = getStreamRecorderWithResult(0, "1")
         assertEquals(0, stream1.values.size)
         assertNotNull(stream1.error)
@@ -99,7 +99,7 @@ class CosmasGoogleCloudServiceTest {
                 .setProjectId(projectId)
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
-        service.createVersion(newVersionRequest, createVersionRecorder)
+        this.service.createVersion(newVersionRequest, createVersionRecorder)
     }
 
     private fun getServiceForTests(): CosmasGoogleCloudService {

@@ -27,11 +27,11 @@ import org.junit.Before
  */
 class CosmasInMemoryServiceTest {
 
-    private var service = CosmasInMemoryService()
+    private lateinit var service: CosmasInMemoryService
 
     @Before
     fun testInitialization() {
-        service = CosmasInMemoryService()
+        this.service = CosmasInMemoryService()
         println()
     }
 
@@ -128,7 +128,7 @@ class CosmasInMemoryServiceTest {
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()
-        service.getVersion(getVersionRequest, getVersionRecorder)
+        this.service.getVersion(getVersionRequest, getVersionRecorder)
         return getVersionRecorder
     }
 
@@ -140,6 +140,6 @@ class CosmasInMemoryServiceTest {
                 .setProjectId(projectId)
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
-        service.createVersion(newVersionRequest, createVersionRecorder)
+        this.service.createVersion(newVersionRequest, createVersionRecorder)
     }
 }

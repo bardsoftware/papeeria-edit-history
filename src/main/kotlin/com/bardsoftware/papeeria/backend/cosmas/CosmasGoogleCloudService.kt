@@ -63,15 +63,15 @@ class CosmasGoogleCloudService(private val bucketName: String,
             return
         }
         val response = CosmasProto.GetVersionResponse.newBuilder()
-        if (blob != null) {
-            response.file = ByteString.copyFrom(blob.getContent())
-            responseObserver.onNext(response.build())
-            responseObserver.onCompleted()
-        } else {
+        if (blob == null) {
             val requestStatus = Status.NOT_FOUND.withDescription("There is no such file in storage")
             println("This request is incorrect: " + requestStatus.description)
             responseObserver.onError(StatusException(requestStatus))
+            return
         }
+        response.file = ByteString.copyFrom(blob.getContent())
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
     }
 
     fun deleteFile(fileId: String) {
