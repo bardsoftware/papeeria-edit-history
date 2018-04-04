@@ -1,8 +1,11 @@
 FROM openjdk:8-slim
 
-ENV DIR_NAME Cosmas-1.0-SNAPSHOT
+ARG COSMAS_VERSION
 
-ADD ./build/distributions/${DIR_NAME}.zip  ./${DIR_NAME}.zip
+ADD ./build/distributions/${COSMAS_VERSION}.zip  ./${COSMAS_VERSION}.zip
 
-RUN unzip -n ${DIR_NAME}.zip
-ENTRYPOINT ./${DIR_NAME}/bin/cosmas-server
+RUN unzip -n ${COSMAS_VERSION}.zip
+
+WORKDIR ./${COSMAS_VERSION}/bin/
+
+ENTRYPOINT ./cosmas-server
