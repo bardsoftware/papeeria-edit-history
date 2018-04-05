@@ -18,7 +18,6 @@ import com.google.protobuf.ByteString
 import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
-import io.grpc.stub.StreamObserver
 import org.junit.Before
 
 /**
@@ -141,5 +140,85 @@ class CosmasInMemoryServiceTest {
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
         this.service.createVersion(newVersionRequest, createVersionRecorder)
+    }
+
+    private fun addFileWithHistoryToService(text: String, user: String = "No name", fileId: String = "0",
+                                            time: Long = 0) {
+        val createVersionRecorder: StreamRecorder<CosmasProto.CreateHistoryOfVersionResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.CreateHistoryOfVersionRequest
+                .newBuilder()
+                .setUser(user)
+                .setFileId(fileId)
+                .setPatch(text)
+                .setTimeStamp(time)
+                .build()
+        this.service.createHistoryOfVersion(newVersionRequest, createVersionRecorder)
+    }
+
+    private fun getStreamRecorderWithResultHistory(version: Int, fileId: String = "0"):
+            StreamRecorder<CosmasProto.GetHistoryOfVersionResponse> {
+        val getVersionRecorder: StreamRecorder<CosmasProto.GetHistoryOfVersionResponse> = StreamRecorder.create()
+        val getVersionRequest = CosmasProto.GetHistoryOfVersionRequest
+                .newBuilder()
+                .setVersion(version)
+                .setFileId(fileId)
+                .build()
+        this.service.getHistoryOfVersion(getVersionRequest, getVersionRecorder)
+        return getVersionRecorder
+    }
+
+    private fun checkCorrect(user : String, text : String, time : Long,
+                             ans : CosmasProto.GetHistoryOfVersionResponse) : Boolean {
+        return ans.user == user && ans.patch == text && ans.timeStamp == time
+    }
+
+    @Test
+    fun addOneHistory() {
+        addFileWithHistoryToService("Hey Jude, don't make it bad.", "The Beatles", "1", 1968)
+        val ans = getStreamRecorderWithResultHistory(0, "1").values[0]
+        assertEquals("The Beatles", ans.user)
+        assertEquals("Hey Jude, don't make it bad.", ans.patch)
+        assertEquals(1968, ans.timeStamp)
+    }
+
+    @Test
+    fun addManyVersionsOfOneFile() {
+        addFileWithHistoryToService("Hey Jude, don't make it bad", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Take a sad song and make it better", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Remember to let her into your heart", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Then you can start to make it better", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Hey Jude, don't be afraid", "The Beatles", "1", 1968)
+        val ans0 = getStreamRecorderWithResultHistory(0, "1").values[0]
+        val ans1 = getStreamRecorderWithResultHistory(1, "1").values[0]
+        val ans2 = getStreamRecorderWithResultHistory(2, "1").values[0]
+        val ans3 = getStreamRecorderWithResultHistory(3, "1").values[0]
+        val ans4 = getStreamRecorderWithResultHistory(4, "1").values[0]
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't make it bad", 1968, ans0))
+        assertTrue(checkCorrect("The Beatles", "Take a sad song and make it better", 1968, ans1))
+        assertTrue(checkCorrect("The Beatles", "Remember to let her into your heart", 1968, ans2))
+        assertTrue(checkCorrect("The Beatles", "Then you can start to make it better", 1968, ans3))
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't be afraid", 1968, ans4))
+    }
+
+    @Test
+    fun addManyFilesAndManyVersionsHistory() {
+        addFileWithHistoryToService("Hey Jude, don't make it bad", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Take a sad song and make it better", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Remember to let her into your heart", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("Then you can start to make it better", "The Beatles", "1", 1968)
+        addFileWithHistoryToService("When I find myself in times of trouble", "The Beatles", "0", 1970)
+        addFileWithHistoryToService("Mother Mary comes to me,", "The Beatles", "0", 1970)
+        addFileWithHistoryToService("Speaking words of wisdom -", "The Beatles", "0", 1970)
+        addFileWithHistoryToService("Let it be.", "The Beatles", "0", 1970)
+        addFileWithHistoryToService("Help! I need somebody", "The Beatles", "3", 1965)
+        addFileWithHistoryToService("Help! Not just anybody", "The Beatles", "3", 1965)
+        assertTrue(checkCorrect("The Beatles", "Remember to let her into your heart", 1968,
+                getStreamRecorderWithResultHistory(2, "1").values[0]))
+        assertTrue(checkCorrect("The Beatles", "Let it be.", 1970,
+                getStreamRecorderWithResultHistory(3, "0").values[0]))
+        assertTrue(checkCorrect("The Beatles", "Help! I need somebody", 1965,
+                getStreamRecorderWithResultHistory(0, "3").values[0]))
+        assertFalse(checkCorrect("The Beatles", "Then you can start to make it better", 1968,
+                getStreamRecorderWithResultHistory(3, "0").values[0]))
     }
 }
