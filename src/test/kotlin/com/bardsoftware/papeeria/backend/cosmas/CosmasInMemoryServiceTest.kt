@@ -103,23 +103,31 @@ class CosmasInMemoryServiceTest {
         val file2 = getFileFromService(0, "2")
         val file3 = getFileFromService(0, "3")
         val file4 = getFileFromService(0, "4")
-        val file2_1 = getFileFromService(1, "2")
-        val file4_1 = getFileFromService(1, "4")
-        val file4_2 = getFileFromService(2, "4")
+        val file2ver1 = getFileFromService(1, "2")
+        val file4ver1 = getFileFromService(1, "4")
+        val file4ver2 = getFileFromService(2, "4")
         assertEquals("file1", file1.toStringUtf8())
         assertEquals("file2", file2.toStringUtf8())
         assertEquals("file3", file3.toStringUtf8())
         assertEquals("file4", file4.toStringUtf8())
-        assertEquals("file2ver1", file2_1.toStringUtf8())
-        assertEquals("file4ver1", file4_1.toStringUtf8())
-        assertEquals("file4ver2", file4_2.toStringUtf8())
+        assertEquals("file2ver1", file2ver1.toStringUtf8())
+        assertEquals("file4ver1", file4ver1.toStringUtf8())
+        assertEquals("file4ver2", file4ver2.toStringUtf8())
     }
 
-    private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
+    @Test
+    fun checkListOfVersions() {
+        addFileToService("ver1", "43")
+        addFileToService("ver2", "43")
+        addFileToService("ver3", "43")
+        assertArrayEquals(listOf(0L, 1L, 2L).toLongArray(), getVersionsList("43").toLongArray())
+    }
+
+    private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): ByteString {
         return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
     }
 
-    private fun getStreamRecorderWithResult(version: Int, fileId: String = "0", projectId: String = "0"):
+    private fun getStreamRecorderWithResult(version: Long, fileId: String = "0", projectId: String = "0"):
             StreamRecorder<CosmasProto.GetVersionResponse> {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = CosmasProto.GetVersionRequest
@@ -141,5 +149,21 @@ class CosmasInMemoryServiceTest {
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
         this.service.createVersion(newVersionRequest, createVersionRecorder)
+    }
+
+    private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
+            StreamRecorder<CosmasProto.ListOfFileVersionsResponse> {
+        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.ListOfFileVersionsResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.ListOfFileVersionsRequest
+                .newBuilder()
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .build()
+        this.service.listOfFileVersions(newVersionRequest, listOfFileVersionsRecorder)
+        return listOfFileVersionsRecorder
+    }
+
+    private fun getVersionsList(fileId: String = "0", projectId: String = "0"): List<Long> {
+        return getStreamRecorderForVersionList(fileId, projectId).values[0].versionsList
     }
 }

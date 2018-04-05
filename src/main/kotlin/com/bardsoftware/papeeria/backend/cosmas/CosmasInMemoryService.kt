@@ -29,6 +29,23 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 
+    override fun listOfFileVersions(request: CosmasProto.ListOfFileVersionsRequest,
+                                    responseObserver: StreamObserver<CosmasProto.ListOfFileVersionsResponse>) {
+        println("Get request for list of versions file # ${request.fileId}")
+        val response = CosmasProto.ListOfFileVersionsResponse.newBuilder()
+        val fileVersions = this.files[request.fileId]
+        if (fileVersions == null) {
+            val status = Status.INVALID_ARGUMENT.withDescription(
+                    "There is no file in storage with file id ${request.fileId}")
+            println(status.description)
+            responseObserver.onError(StatusException(status))
+            return
+        }
+        response.addAllVersions((0 until fileVersions.size).toList().map { i -> i.toLong() })
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version ${request.version} file # ${request.fileId}")
@@ -37,7 +54,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             val fileVersions = this.files[request.fileId]
             val requestStatus = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
-                response.file = fileVersions?.get(request.version)
+                response.file = fileVersions?.get(request.version.toInt())
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {

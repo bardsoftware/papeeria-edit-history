@@ -21,7 +21,7 @@ option java_outer_classname = "CosmasProto";
 message GetVersionRequest {
     string projectId = 1;
     string fileId = 2;
-    int32 version = 3;
+    int64 version = 3;
 }
 
 message GetVersionResponse {
@@ -37,9 +37,20 @@ message CreateVersionRequest {
 message CreateVersionResponse {
 }
 
+message ListOfFileVersionsRequest {
+    string projectId = 1;
+    string fileId = 2;
+}
+
+message ListOfFileVersionsResponse {
+    repeated int64 versions = 1;
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
     rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
+    }
+    rpc ListOfFileVersions(ListOfFileVersionsRequest) returns (ListOfFileVersionsResponse) {
     }
 }
