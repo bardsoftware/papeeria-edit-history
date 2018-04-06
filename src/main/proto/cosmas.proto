@@ -37,25 +37,14 @@ message CreateVersionRequest {
 message CreateVersionResponse {
 }
 
-message CreateHistoryOfVersionRequest {
+message CreatePatchRequest {
     string user = 1;
     string fileId = 2;
-    string patch = 3;
+    string text = 3;
     int64 timeStamp = 4;
 }
 
-message CreateHistoryOfVersionResponse {
-}
-
-message GetHistoryOfVersionRequest {
-    string fileId = 1;
-    int32 version = 2;
-}
-
-message GetHistoryOfVersionResponse {
-    string user = 1;
-    string patch = 2;
-    int64 timeStamp = 3;
+message CreatePatchResponse {
 }
 
 service Cosmas {
@@ -63,8 +52,6 @@ service Cosmas {
     }
     rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
     }
-    rpc CreateHistoryOfVersion (CreateHistoryOfVersionRequest) returns (CreateHistoryOfVersionResponse) {
-    }
-    rpc GetHistoryOfVersion (GetHistoryOfVersionRequest) returns (GetHistoryOfVersionResponse) {
+    rpc CreatePatch (CreatePatchRequest) returns (CreatePatchResponse) {
     }
 }

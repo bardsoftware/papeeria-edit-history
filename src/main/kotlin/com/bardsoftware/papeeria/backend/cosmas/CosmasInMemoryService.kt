@@ -29,13 +29,9 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 
-    private val versions = mutableMapOf<String, MutableList<storedStructure>>()
+    private val patches = mutableMapOf<String, MutableList<Patch>>()
 
-    private class storedStructure(user1: String, text: String, time: Long) {
-        val user = user1
-        val patch = text
-        val timeStamp = time
-    }
+    data class Patch(val user: String, val text: String, val timeStamp: Long)
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
@@ -84,24 +80,6 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         responseObserver.onCompleted()
     }
 
-    private fun verifyGetHistoryOfVersionRequest(request: CosmasProto.GetHistoryOfVersionRequest): Status {
-        var status: Status = Status.OK
-        val fileVersions = this.versions[request.fileId]
-        when {
-            fileVersions == null ->
-                status = Status.INVALID_ARGUMENT.withDescription(
-                        "There is no file in storage with file id ${request.fileId}")
-            request.version >= fileVersions.size ->
-                status = Status.OUT_OF_RANGE.withDescription(
-                        "In storage this file has ${fileVersions.size} versions, " +
-                                "but you ask for version ${request.version}")
-            request.version < 0 ->
-                status = Status.OUT_OF_RANGE.withDescription(
-                        "You ask for version ${request.version} that is negative")
-        }
-        return status
-    }
-
     private fun addNewVersion(request: CosmasProto.CreateVersionRequest) {
         synchronized(this.files) {
             val fileVersions = this.files[request.fileId] ?: mutableListOf()
@@ -110,39 +88,22 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         }
     }
 
-    override fun createHistoryOfVersion(request: CosmasProto.CreateHistoryOfVersionRequest,
-                                        responseObserver: StreamObserver<CosmasProto.CreateHistoryOfVersionResponse>) {
+    override fun createPatch(request: CosmasProto.CreatePatchRequest,
+                                        responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
         println("Get request for create new history of file # ${request.fileId}")
-        synchronized(this.versions) {
-            val historyOfFile = versions[request.fileId] ?: mutableListOf()
-            historyOfFile.add(storedStructure(request.user, request.patch, request.timeStamp))
-            versions[request.fileId] = historyOfFile
+        synchronized(this.patches) {
+            val historyOfFile = patches[request.fileId] ?: mutableListOf()
+            historyOfFile.add(Patch(request.user, request.text, request.timeStamp))
+            patches[request.fileId] = historyOfFile
         }
-        val response: CosmasProto.CreateHistoryOfVersionResponse = CosmasProto.CreateHistoryOfVersionResponse
+        val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
                 .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
 
-    override fun getHistoryOfVersion(request: CosmasProto.GetHistoryOfVersionRequest,
-                                      responseObserver: StreamObserver<CosmasProto.GetHistoryOfVersionResponse>) {
-        println("Get request for history ${request.version} file # ${request.fileId}")
-        val response = CosmasProto.GetHistoryOfVersionResponse.newBuilder()
-        synchronized(this.versions) {
-            val fileHistoryOfVersions = this.versions[request.fileId]
-            val requestStatus = verifyGetHistoryOfVersionRequest(request)
-            if (requestStatus.isOk) {
-                val history = fileHistoryOfVersions?.get(request.version)
-                response.user = history?.user
-                response.patch = history?.patch
-                response.timeStamp = history?.timeStamp ?: 0
-                responseObserver.onNext(response.build())
-                responseObserver.onCompleted()
-            } else {
-                println("This request is incorrect: " + requestStatus.description)
-                responseObserver.onError(StatusException(requestStatus))
-            }
-        }
+    fun getPatch(version: Int, fileId: String) : Patch? {
+        return patches[fileId]?.get(version)
     }
 }
