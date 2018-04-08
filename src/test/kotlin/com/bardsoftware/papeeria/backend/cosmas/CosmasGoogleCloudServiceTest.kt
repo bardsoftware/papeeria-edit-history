@@ -99,11 +99,11 @@ class CosmasGoogleCloudServiceTest {
 
         Mockito.`when`(fakePage.iterateAll())
                 .thenReturn(listOf(blob1, blob2))
-        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
         addFileToService("ver2", "43")
         assertEquals(listOf(1L, 2L), getVersionsList("43"))
-        service = getServiceForTests()
+        this.service = getServiceForTests()
     }
 
     @Test
@@ -117,12 +117,12 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(fakeStorage.get(
                 any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
                 .thenReturn(blob1).thenReturn(blob2)
-        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
         addFileToService("ver2", "43")
         assertEquals("ver1", getFileFromService(1444, "43").toStringUtf8())
         assertEquals("ver2", getFileFromService(822, "43").toStringUtf8())
-        service = getServiceForTests()
+        this.service = getServiceForTests()
     }
 
     @Test
@@ -131,7 +131,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(fakeStorage.create(
                 any(BlobInfo::class.java), any(ByteArray::class.java)))
                 .thenThrow(StorageException(1, "test"))
-        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
         val newVersionRequest = CosmasProto.CreateVersionRequest
                 .newBuilder()
@@ -142,6 +142,7 @@ class CosmasGoogleCloudServiceTest {
         this.service.createVersion(newVersionRequest, createVersionRecorder)
         assertNotNull(createVersionRecorder.error)
         assertEquals("test", createVersionRecorder.error!!.message)
+        this.service = getServiceForTests()
     }
 
 
