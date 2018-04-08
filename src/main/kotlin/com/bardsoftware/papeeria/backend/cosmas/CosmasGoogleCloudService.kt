@@ -84,10 +84,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
             handleStorageException(e, responseObserver)
             return
         }
-        for (blob in blobs.iterateAll()) {
-            response.addVersions(blob.generation)
+        blobs.iterateAll().forEach {
+            response.addVersions(it.generation)
         }
-        if (response.versionsList.size == 0) {
+        if (response.versionsList.isEmpty()) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
             println(status.description)

@@ -51,10 +51,9 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         println("Get request for version ${request.version} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(this.files) {
-            val fileVersions = this.files[request.fileId]
-            val requestStatus = verifyGetVersionRequest(request)
+            val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
-                response.file = fileVersions?.get(request.version.toInt())
+                response.file = fileVersions[request.version.toInt()]
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {
@@ -64,7 +63,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         }
     }
 
-    private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Status {
+    private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Pair<Status, List<ByteString>> {
         var status: Status = Status.OK
         val fileVersions = this.files[request.fileId]
         when {
@@ -78,8 +77,9 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             request.version < 0 ->
                 status = Status.OUT_OF_RANGE.withDescription(
                         "You ask for version ${request.version} that is negative")
+            else -> return Pair(status, fileVersions)
         }
-        return status
+        return Pair(status, emptyList())
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,

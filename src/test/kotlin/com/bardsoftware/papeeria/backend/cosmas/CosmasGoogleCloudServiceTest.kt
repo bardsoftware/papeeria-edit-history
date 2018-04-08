@@ -16,22 +16,16 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
-import com.google.cloud.storage.testing.RemoteStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
-import org.junit.After
-import org.junit.AfterClass
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
-import org.mockito.Matchers
+import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
-import org.mockito.MockSettings
 import org.mockito.Mockito
-import org.mockito.Mockito.any
 import org.mockito.Mockito.mock
-import java.io.FileInputStream
 
 
 /**
@@ -41,7 +35,7 @@ import java.io.FileInputStream
  */
 class CosmasGoogleCloudServiceTest {
 
-    private val bucketName = "papeeria-interns-cosmas"
+    private val BUCKET_NAME = "papeeria-interns-cosmas"
     private var service = getServiceForTests()
 
     @Before
@@ -91,41 +85,63 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun addSecondVersionAndCheckListVersions() {
         val fakeStorage: Storage = mock(Storage::class.java)
-        val blob1 = getMockedBlob("ver1".toByteArray(), 1)
-        val blob2 = getMockedBlob("ver2".toByteArray(), 2)
+        val blob1 = getMockedBlob("ver1", 1)
+        val blob2 = getMockedBlob("ver2", 2)
         val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
 
-        Mockito.`when`(fakeStorage.create(Matchers.any(BlobInfo::class.java),
-                Matchers.any(ByteArray::class.java))).thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
 
-        Mockito.`when`(fakeStorage.list(eq(this.bucketName),
-                Matchers.any(Storage.BlobListOption::class.java),
-                Matchers.any(Storage.BlobListOption::class.java))).thenReturn(fakePage)
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
 
-        Mockito.`when`(fakePage.iterateAll()).thenReturn(listOf(blob1, blob2))
-        service = CosmasGoogleCloudService(this.bucketName, fakeStorage)
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob2))
+        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
         addFileToService("ver2", "43")
-        assertArrayEquals(listOf(1L, 2L).toLongArray(), getVersionsList("43").toLongArray())
+        assertEquals(listOf(1L, 2L), getVersionsList("43"))
         service = getServiceForTests()
     }
 
     @Test
     fun getBothVersions() {
         val fakeStorage: Storage = mock(Storage::class.java)
-        val blob1 = getMockedBlob("ver1".toByteArray(), 1444)
-        val blob2 = getMockedBlob("ver2".toByteArray(), 822)
-        Mockito.`when`(fakeStorage.create(Matchers.any(BlobInfo::class.java),
-                Matchers.any(ByteArray::class.java))).thenReturn(blob1).thenReturn(blob2)
-        Mockito.`when`(fakeStorage.get(Matchers.any(BlobId::class.java),
-                Matchers.any(Storage.BlobGetOption::class.java))).
-                thenReturn(blob1).thenReturn(blob2)
-        service = CosmasGoogleCloudService(this.bucketName, fakeStorage)
+        val blob1 = getMockedBlob("ver1", 1444)
+        val blob2 = getMockedBlob("ver2", 822)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
         addFileToService("ver2", "43")
         assertEquals("ver1", getFileFromService(1444, "43").toStringUtf8())
         assertEquals("ver2", getFileFromService(822, "43").toStringUtf8())
         service = getServiceForTests()
+    }
+
+    @Test
+    fun handleStorageException() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenThrow(StorageException(1, "test"))
+        service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.CreateVersionRequest
+                .newBuilder()
+                .setFileId("0")
+                .setProjectId("0")
+                .setFile(ByteString.copyFromUtf8("text"))
+                .build()
+        this.service.createVersion(newVersionRequest, createVersionRecorder)
+        assertNotNull(createVersionRecorder.error)
+        assertEquals("test", createVersionRecorder.error!!.message)
     }
 
 
@@ -158,8 +174,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getServiceForTests(): CosmasGoogleCloudService {
-        return CosmasGoogleCloudService(this.bucketName, LocalStorageHelper.getOptions().service)
-        //return CosmasGoogleCloudService(this.bucketName)
+        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service)
     }
 
     private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
@@ -179,9 +194,9 @@ class CosmasGoogleCloudServiceTest {
     }
 
 
-    private fun getMockedBlob(file: ByteArray, generation: Long = 0): Blob {
+    private fun getMockedBlob(file: String, generation: Long = 0): Blob {
         val blob = mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(file)
+        Mockito.`when`(blob.getContent()).thenReturn(file.toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
     }
