@@ -14,12 +14,19 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import com.google.api.gax.paging.Page
+import com.google.cloud.storage.*
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import org.mockito.Matchers.any
+import org.mockito.Matchers.eq
+import org.mockito.Mockito
+import org.mockito.Mockito.mock
+
 
 /**
  * Some tests for CosmasGoogleCloudService
@@ -28,6 +35,7 @@ import org.junit.Test
  */
 class CosmasGoogleCloudServiceTest {
 
+    private val BUCKET_NAME = "papeeria-interns-cosmas"
     private var service = getServiceForTests()
 
     @Before
@@ -74,11 +82,75 @@ class CosmasGoogleCloudServiceTest {
         assertNotNull(stream2.error)
     }
 
-    private fun getFileFromService(version: Int, fileId: String = "0", projectId: String = "0"): ByteString {
+    @Test
+    fun addSecondVersionAndCheckListVersions() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver1", 1)
+        val blob2 = getMockedBlob("ver2", 2)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
+
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob2))
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        addFileToService("ver1", "43")
+        addFileToService("ver2", "43")
+        assertEquals(listOf(1L, 2L), getVersionsList("43"))
+        this.service = getServiceForTests()
+    }
+
+    @Test
+    fun getBothVersions() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver1", 1444)
+        val blob2 = getMockedBlob("ver2", 822)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        addFileToService("ver1", "43")
+        addFileToService("ver2", "43")
+        assertEquals("ver1", getFileFromService(1444, "43").toStringUtf8())
+        assertEquals("ver2", getFileFromService(822, "43").toStringUtf8())
+        this.service = getServiceForTests()
+    }
+
+    @Test
+    fun handleStorageException() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenThrow(StorageException(1, "test"))
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.CreateVersionRequest
+                .newBuilder()
+                .setFileId("0")
+                .setProjectId("0")
+                .setFile(ByteString.copyFromUtf8("text"))
+                .build()
+        this.service.createVersion(newVersionRequest, createVersionRecorder)
+        assertNotNull(createVersionRecorder.error)
+        assertEquals("test", createVersionRecorder.error!!.message)
+        this.service = getServiceForTests()
+    }
+
+
+    private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): ByteString {
         return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
     }
 
-    private fun getStreamRecorderWithResult(version: Int, fileId: String = "0", projectId: String = "0"):
+    private fun getStreamRecorderWithResult(version: Long, fileId: String = "0", projectId: String = "0"):
             StreamRecorder<CosmasProto.GetVersionResponse> {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = CosmasProto.GetVersionRequest
@@ -103,7 +175,30 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getServiceForTests(): CosmasGoogleCloudService {
-        return CosmasGoogleCloudService("papeeria-interns-cosmas",
-                LocalStorageHelper.getOptions().service)
+        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service)
+    }
+
+    private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
+            StreamRecorder<CosmasProto.FileVersionListResponse> {
+        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.FileVersionListResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.FileVersionListRequest
+                .newBuilder()
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .build()
+        this.service.fileVersionList(newVersionRequest, listOfFileVersionsRecorder)
+        return listOfFileVersionsRecorder
+    }
+
+    private fun getVersionsList(fileId: String = "0", projectId: String = "0"): List<Long> {
+        return getStreamRecorderForVersionList(fileId, projectId).values[0].versionsList
+    }
+
+
+    private fun getMockedBlob(file: String, generation: Long = 0): Blob {
+        val blob = mock(Blob::class.java)
+        Mockito.`when`(blob.getContent()).thenReturn(file.toByteArray())
+        Mockito.`when`(blob.generation).thenReturn(generation)
+        return blob
     }
 }

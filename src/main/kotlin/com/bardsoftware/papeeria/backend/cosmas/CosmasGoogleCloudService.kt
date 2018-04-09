@@ -14,15 +14,12 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
 import io.grpc.stub.StreamObserver
-import com.google.cloud.storage.Acl.User
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
-import java.util.Arrays
-import java.util.ArrayList
 
 /**
  * Special class that can work with requests from CosmasClient
@@ -37,12 +34,12 @@ class CosmasGoogleCloudService(private val bucketName: String,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version of file # ${request.fileId}")
         try {
-            this.storage.create(
+            val blob = this.storage.create(
                     BlobInfo.newBuilder(this.bucketName, request.fileId).build(),
                     request.file.toByteArray())
+            println("Generation of created file: ${blob.generation}")
         } catch (e: StorageException) {
-            println("StorageException happened: ${e.message}")
-            responseObserver.onError(e)
+            handleStorageException(e, responseObserver)
             return
         }
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
@@ -56,22 +53,54 @@ class CosmasGoogleCloudService(private val bucketName: String,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version ${request.version} file # ${request.fileId}")
         val blob: Blob? = try {
-            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.fileId).build().blobId)
+            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.fileId).build().blobId,
+                    Storage.BlobGetOption.generationMatch(request.version))
         } catch (e: StorageException) {
-            println("StorageException happened: ${e.message}")
-            responseObserver.onError(e)
+            handleStorageException(e, responseObserver)
             return
         }
         val response = CosmasProto.GetVersionResponse.newBuilder()
         if (blob == null) {
-            val requestStatus = Status.NOT_FOUND.withDescription("There is no such file in storage")
+            val requestStatus = Status.NOT_FOUND.withDescription(
+                    "There is no such file or file version in storage")
             println("This request is incorrect: " + requestStatus.description)
             responseObserver.onError(StatusException(requestStatus))
             return
         }
+        println("Generation: ${blob.generation}")
         response.file = ByteString.copyFrom(blob.getContent())
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
+    }
+
+    override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
+                                 responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
+        println("Get request for list of versions file # ${request.fileId}")
+        val response = CosmasProto.FileVersionListResponse.newBuilder()
+        val blobs: Page<Blob> = try {
+            this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
+                    Storage.BlobListOption.prefix(request.fileId))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        blobs.iterateAll().forEach {
+            response.addVersions(it.generation)
+        }
+        if (response.versionsList.isEmpty()) {
+            val status = Status.INVALID_ARGUMENT.withDescription(
+                    "There is no file in storage with file id ${request.fileId}")
+            println(status.description)
+            responseObserver.onError(StatusException(status))
+            return
+        }
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
+    private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
+        println("StorageException happened: ${e.message}")
+        responseObserver.onError(e)
     }
 
     fun deleteFile(fileId: String) {

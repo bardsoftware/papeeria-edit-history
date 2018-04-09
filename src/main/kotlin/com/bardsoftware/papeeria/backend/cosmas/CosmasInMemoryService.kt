@@ -29,15 +29,31 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 
+    override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
+                                 responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
+        println("Get request for list of versions file # ${request.fileId}")
+        val fileVersions = this.files[request.fileId]
+        if (fileVersions == null) {
+            val status = Status.INVALID_ARGUMENT.withDescription(
+                    "There is no file in storage with file id ${request.fileId}")
+            println(status.description)
+            responseObserver.onError(StatusException(status))
+            return
+        }
+        val response = CosmasProto.FileVersionListResponse.newBuilder()
+        response.addAllVersions(0L until fileVersions.size)
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         println("Get request for version ${request.version} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(this.files) {
-            val fileVersions = this.files[request.fileId]
-            val requestStatus = verifyGetVersionRequest(request)
+            val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
-                response.file = fileVersions?.get(request.version)
+                response.file = fileVersions[request.version.toInt()]
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {
@@ -47,7 +63,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         }
     }
 
-    private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Status {
+    private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Pair<Status, List<ByteString>> {
         var status: Status = Status.OK
         val fileVersions = this.files[request.fileId]
         when {
@@ -61,8 +77,9 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             request.version < 0 ->
                 status = Status.OUT_OF_RANGE.withDescription(
                         "You ask for version ${request.version} that is negative")
+            else -> return Pair(status, fileVersions)
         }
-        return status
+        return Pair(status, emptyList())
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
