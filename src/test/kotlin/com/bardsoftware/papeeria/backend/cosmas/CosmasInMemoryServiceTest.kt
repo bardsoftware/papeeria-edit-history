@@ -18,7 +18,6 @@ import com.google.protobuf.ByteString
 import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
-import io.grpc.stub.StreamObserver
 import org.junit.Before
 
 /**
@@ -152,14 +151,14 @@ class CosmasInMemoryServiceTest {
     }
 
     private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
-            StreamRecorder<CosmasProto.ListOfFileVersionsResponse> {
-        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.ListOfFileVersionsResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.ListOfFileVersionsRequest
+            StreamRecorder<CosmasProto.FileVersionListResponse> {
+        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.FileVersionListResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.FileVersionListRequest
                 .newBuilder()
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()
-        this.service.listOfFileVersions(newVersionRequest, listOfFileVersionsRecorder)
+        this.service.fileVersionList(newVersionRequest, listOfFileVersionsRecorder)
         return listOfFileVersionsRecorder
     }
 

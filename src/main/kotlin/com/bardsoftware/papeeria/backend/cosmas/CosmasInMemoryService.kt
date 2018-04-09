@@ -29,10 +29,9 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
 
-    override fun listOfFileVersions(request: CosmasProto.ListOfFileVersionsRequest,
-                                    responseObserver: StreamObserver<CosmasProto.ListOfFileVersionsResponse>) {
+    override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
+                                 responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
         println("Get request for list of versions file # ${request.fileId}")
-        val response = CosmasProto.ListOfFileVersionsResponse.newBuilder()
         val fileVersions = this.files[request.fileId]
         if (fileVersions == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
@@ -41,7 +40,8 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             responseObserver.onError(StatusException(status))
             return
         }
-        response.addAllVersions((0 until fileVersions.size).toList().map { i -> i.toLong() })
+        val response = CosmasProto.FileVersionListResponse.newBuilder()
+        response.addAllVersions(0L until fileVersions.size)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }

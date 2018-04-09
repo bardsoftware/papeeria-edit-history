@@ -73,10 +73,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
-    override fun listOfFileVersions(request: CosmasProto.ListOfFileVersionsRequest,
-                                    responseObserver: StreamObserver<CosmasProto.ListOfFileVersionsResponse>) {
+    override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
+                                 responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
         println("Get request for list of versions file # ${request.fileId}")
-        val response = CosmasProto.ListOfFileVersionsResponse.newBuilder()
+        val response = CosmasProto.FileVersionListResponse.newBuilder()
         val blobs: Page<Blob> = try {
             this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
                     Storage.BlobListOption.prefix(request.fileId))

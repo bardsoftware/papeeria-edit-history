@@ -37,12 +37,12 @@ message CreateVersionRequest {
 message CreateVersionResponse {
 }
 
-message ListOfFileVersionsRequest {
+message FileVersionListRequest {
     string projectId = 1;
     string fileId = 2;
 }
 
-message ListOfFileVersionsResponse {
+message FileVersionListResponse {
     repeated int64 versions = 1;
 }
 
@@ -51,6 +51,6 @@ service Cosmas {
     }
     rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
     }
-    rpc ListOfFileVersions(ListOfFileVersionsRequest) returns (ListOfFileVersionsResponse) {
+    rpc FileVersionList (FileVersionListRequest) returns (FileVersionListResponse) {
     }
 }

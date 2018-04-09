@@ -179,14 +179,14 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
-            StreamRecorder<CosmasProto.ListOfFileVersionsResponse> {
-        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.ListOfFileVersionsResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.ListOfFileVersionsRequest
+            StreamRecorder<CosmasProto.FileVersionListResponse> {
+        val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.FileVersionListResponse> = StreamRecorder.create()
+        val newVersionRequest = CosmasProto.FileVersionListRequest
                 .newBuilder()
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()
-        this.service.listOfFileVersions(newVersionRequest, listOfFileVersionsRecorder)
+        this.service.fileVersionList(newVersionRequest, listOfFileVersionsRecorder)
         return listOfFileVersionsRecorder
     }
 
