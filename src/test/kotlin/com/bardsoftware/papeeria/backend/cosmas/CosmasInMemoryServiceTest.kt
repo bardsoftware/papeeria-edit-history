@@ -19,7 +19,6 @@ import org.junit.Assert.*
 import org.junit.Test
 import io.grpc.internal.testing.StreamRecorder
 import org.junit.Before
-import javax.sound.midi.Patch
 
 /**
  * This is some tests for CosmasService class
@@ -143,12 +142,11 @@ class CosmasInMemoryServiceTest {
         this.service.createVersion(newVersionRequest, createVersionRecorder)
     }
 
-    private fun addPatchToService(text: String, user: String = "No name", fileId: String = "0",
-                                            time: Long = 0) {
+    private fun addPatchToService(text: String, user: String = "No name", fileId: String = "0", time: Long = 0) {
         val createVersionRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
         val newVersionRequest = CosmasProto.CreatePatchRequest
                 .newBuilder()
-                .setUser(user)
+                .setUserId(user)
                 .setFileId(fileId)
                 .setText(text)
                 .setTimeStamp(time)
@@ -156,8 +154,7 @@ class CosmasInMemoryServiceTest {
         this.service.createPatch(newVersionRequest, createVersionRecorder)
     }
 
-    private fun checkCorrect(user : String, text : String, time : Long,
-                             ans : CosmasInMemoryService.Patch?) : Boolean {
+    private fun checkCorrect(user: String, text: String, time: Long, ans: CosmasInMemoryService.Patch?) : Boolean {
         return ans != null && ans.user == user && ans.text == text && ans.timeStamp == time
     }
 
@@ -165,9 +162,7 @@ class CosmasInMemoryServiceTest {
     fun addOnePatch() {
         addPatchToService("Hey Jude, don't make it bad.", "The Beatles", "1", 1968)
         val ans = service.getPatch(0, "1")
-        assertEquals("The Beatles", ans?.user)
-        assertEquals("Hey Jude, don't make it bad.", ans?.text)
-        assertEquals(1968L, ans?.timeStamp)
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't make it bad.", 1968, ans))
     }
 
     @Test

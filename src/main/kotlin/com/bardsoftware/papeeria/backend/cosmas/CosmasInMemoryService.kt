@@ -89,12 +89,12 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
-                                        responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        println("Get request for create new history of file # ${request.fileId}")
+                             responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
+        println("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
         synchronized(this.patches) {
-            val historyOfFile = patches[request.fileId] ?: mutableListOf()
-            historyOfFile.add(Patch(request.user, request.text, request.timeStamp))
-            patches[request.fileId] = historyOfFile
+            val patchesList = patches[request.fileId] ?: mutableListOf()
+            patchesList.add(Patch(request.userId, request.text, request.timeStamp))
+            patches[request.fileId] = patchesList
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
