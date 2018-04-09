@@ -46,9 +46,9 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun addFileAndGetFile() {
         addFileToService("file", "43")
+        commit()
         val file = getFileFromService(0, "43")
-        assertFalse(file.isEmpty)
-        assertEquals("file", file.toStringUtf8())
+        assertEquals("file", file)
         this.service.deleteFile("43")
         val stream = getStreamRecorderWithResult(0, "43")
         assertEquals(0, stream.values.size)
@@ -66,12 +66,11 @@ class CosmasGoogleCloudServiceTest {
     fun addTwoFiles() {
         addFileToService("file1", "1")
         addFileToService("file2", "2")
+        commit()
         val file1 = getFileFromService(0, "1")
         val file2 = getFileFromService(0, "2")
-        assertFalse(file1.isEmpty)
-        assertFalse(file2.isEmpty)
-        assertEquals("file1", file1.toStringUtf8())
-        assertEquals("file2", file2.toStringUtf8())
+        assertEquals("file1", file1)
+        assertEquals("file2", file2)
         this.service.deleteFile("1")
         this.service.deleteFile("2")
         val stream1 = getStreamRecorderWithResult(0, "1")
@@ -102,6 +101,7 @@ class CosmasGoogleCloudServiceTest {
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
         addFileToService("ver2", "43")
+        commit()
         assertEquals(listOf(1L, 2L), getVersionsList("43"))
         this.service = getServiceForTests()
     }
@@ -119,9 +119,11 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(blob1).thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addFileToService("ver1", "43")
+        commit()
         addFileToService("ver2", "43")
-        assertEquals("ver1", getFileFromService(1444, "43").toStringUtf8())
-        assertEquals("ver2", getFileFromService(822, "43").toStringUtf8())
+        commit()
+        assertEquals("ver1", getFileFromService(1444, "43"))
+        assertEquals("ver2", getFileFromService(822, "43"))
         this.service = getServiceForTests()
     }
 
@@ -132,22 +134,23 @@ class CosmasGoogleCloudServiceTest {
                 any(BlobInfo::class.java), any(ByteArray::class.java)))
                 .thenThrow(StorageException(1, "test"))
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
-        val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.CreateVersionRequest
-                .newBuilder()
-                .setFileId("0")
-                .setProjectId("0")
-                .setFile(ByteString.copyFromUtf8("text"))
-                .build()
-        this.service.createVersion(newVersionRequest, createVersionRecorder)
-        assertNotNull(createVersionRecorder.error)
-        assertEquals("test", createVersionRecorder.error!!.message)
+        addFileToService("file")
+        val commitRecorder = getStreamRecorderForCommitVersions()
+        assertNotNull(commitRecorder.error)
+        assertEquals("test", commitRecorder.error!!.message)
         this.service = getServiceForTests()
     }
 
+    @Test
+    fun addTwoVersionsAndOneCommit() {
+        addFileToService("ver0")
+        addFileToService("ver1")
+        commit()
+        assertEquals("ver1", getFileFromService(0))
+    }
 
-    private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): ByteString {
-        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
+    private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
+        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file.toStringUtf8()
     }
 
     private fun getStreamRecorderWithResult(version: Long, fileId: String = "0", projectId: String = "0"):
@@ -200,5 +203,20 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(blob.getContent()).thenReturn(file.toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
+    }
+
+    private fun getStreamRecorderForCommitVersions(projectId: String = "0"):
+            StreamRecorder<CosmasProto.CommitVersionResponse> {
+        val commitVersionRecorder: StreamRecorder<CosmasProto.CommitVersionResponse> = StreamRecorder.create()
+        val commitRequest = CosmasProto.CommitVersionRequest
+                .newBuilder()
+                .setProjectId(projectId)
+                .build()
+        this.service.commitVersion(commitRequest, commitVersionRecorder)
+        return commitVersionRecorder
+    }
+
+    private fun commit(projectId: String = "0") {
+        getStreamRecorderForCommitVersions(projectId)
     }
 }
