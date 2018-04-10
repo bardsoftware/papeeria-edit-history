@@ -153,6 +153,51 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("ver1", getFileFromService(0))
     }
 
+    @Test
+    fun makeTwoCommits() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver2", 0)
+        val blob2 = getMockedBlob("ver4", 1)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver2".toByteArray())))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver4".toByteArray())))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1).thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        createVersion("ver1")
+        createVersion("ver2")
+        commit()
+        createVersion("ver3")
+        createVersion("ver4")
+        commit()
+        assertEquals("ver2", getFileFromService(0))
+        assertEquals("ver4", getFileFromService(1))
+    }
+
+    @Test
+    fun addTwoFilesFromOneProject() {
+        createVersion("file0", "0")
+        createVersion("file1", "1")
+        commit()
+        assertEquals("file0", getFileFromService(0, "0"))
+        assertEquals("file1", getFileFromService(0, "1"))
+    }
+
+    @Test
+    fun addTwoFilesFromDifferentProjects() {
+        createVersion("file0", "0", "0")
+        createVersion("file1", "1", "1")
+        commit("0")
+        assertEquals("file0", getFileFromService(0, "0"))
+        val (stream, request) = getStreamRecorderAndRequestForGettingVersion(0, "1", "1")
+        this.service.getVersion(request, stream)
+        assertNotNull(stream.error)
+    }
+
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
         val (getVersionRecorder, getVersionRequest) = getStreamRecorderAndRequestForGettingVersion(version, fileId, projectId)
         this.service.getVersion(getVersionRequest, getVersionRecorder)
@@ -172,8 +217,8 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun createVersion(text: String, fileId: String = "0", projectId: String = "0") {
-        val createVersionRecorder: StreamRecorder<CosmasProto.CreateVersionResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.CreateVersionRequest
+        val createVersionRecorder: StreamRecorder<CreateVersionResponse> = StreamRecorder.create()
+        val newVersionRequest = CreateVersionRequest
                 .newBuilder()
                 .setFileId(fileId)
                 .setProjectId(projectId)
@@ -198,7 +243,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getVersionsList(fileId: String = "0", projectId: String = "0"): List<Long> {
-        val (listVersionsRecorder, listVersionsRequest) =  getStreamRecorderAndRequestForVersionList(fileId, projectId)
+        val (listVersionsRecorder, listVersionsRequest) = getStreamRecorderAndRequestForVersionList(fileId, projectId)
         this.service.fileVersionList(listVersionsRequest, listVersionsRecorder)
         return listVersionsRecorder.values[0].versionsList
     }

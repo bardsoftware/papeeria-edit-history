@@ -30,13 +30,13 @@ import io.grpc.StatusException
 class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
 
-    private val fileBuffer = mutableMapOf<String, MutableMap<String, ByteString>>()
+    private val fileBuffer = mutableMapOf<String, MutableMap<String, ByteString>>().withDefault { mutableMapOf() }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version of file # ${request.fileId}")
         synchronized(fileBuffer) {
-            val project = this.fileBuffer[request.projectId] ?: mutableMapOf()
+            val project = this.fileBuffer.getValue(request.projectId)
             project[request.fileId] = request.file
             this.fileBuffer[request.projectId] = project
         }
