@@ -35,7 +35,7 @@ class CosmasClient(host: String, port: Int) {
 
     private val blockingStub = newBlockingStub(this.channel)
 
-    fun getVersion(version: Int) {
+    fun getVersion(version: Long) {
         println("Ask for version: $version")
         addText()
         val request: GetVersionRequest = GetVersionRequest.newBuilder()
