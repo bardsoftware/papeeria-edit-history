@@ -62,6 +62,7 @@ service Cosmas {
     rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
     }
     rpc CreatePatch (CreatePatchRequest) returns (CreatePatchResponse) {
+    }
     rpc FileVersionList (FileVersionListRequest) returns (FileVersionListResponse) {
     }
 }
