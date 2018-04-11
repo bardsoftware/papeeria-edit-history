@@ -150,16 +150,16 @@ class CosmasInMemoryServiceTest {
         this.service.createVersion(newVersionRequest, createVersionRecorder)
     }
 
-    private fun addPatchToService(text: String, user: String = "No name", fileId: String = "0", time: Long = 0) {
-        val createVersionRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
-        val newVersionRequest = CosmasProto.CreatePatchRequest
+    private fun addPatchToService(text: String, user: String, fileId: String, time: Long) {
+        val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
+        val newPatchRequest = CosmasProto.CreatePatchRequest
                 .newBuilder()
                 .setUserId(user)
                 .setFileId(fileId)
                 .setText(text)
                 .setTimeStamp(time)
                 .build()
-        this.service.createPatch(newVersionRequest, createVersionRecorder)
+        this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
 
     private fun checkCorrect(user: String, text: String, time: Long, ans: CosmasInMemoryService.Patch?) : Boolean {
