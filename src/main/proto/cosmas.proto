@@ -56,6 +56,14 @@ message FileVersionListResponse {
     repeated int64 versions = 1;
 }
 
+message CommitVersionRequest {
+    string projectId = 1;
+}
+
+message CommitVersionResponse {
+
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -64,5 +72,7 @@ service Cosmas {
     rpc CreatePatch (CreatePatchRequest) returns (CreatePatchResponse) {
     }
     rpc FileVersionList (FileVersionListRequest) returns (FileVersionListResponse) {
+    }
+    rpc CommitVersion (CommitVersionRequest) returns (CommitVersionResponse) {
     }
 }
