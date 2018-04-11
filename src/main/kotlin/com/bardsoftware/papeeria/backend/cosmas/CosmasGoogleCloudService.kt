@@ -21,6 +21,7 @@ import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 
 /**
  * Special class that can work with requests from CosmasClient
@@ -30,15 +31,16 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
-    private val fileBuffer = ConcurrentHashMap<String, ConcurrentHashMap<String, ByteString>>().withDefault { ConcurrentHashMap() }
+    private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, ByteString>>().withDefault { ConcurrentHashMap() }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version of file # ${request.fileId}")
-        val project = this.fileBuffer.getValue(request.projectId)
-        project[request.fileId] = request.file
-        this.fileBuffer[request.projectId] = project
-
+        synchronized(this.fileBuffer) {
+            val project = this.fileBuffer.getValue(request.projectId)
+            project[request.fileId] = request.file
+            this.fileBuffer[request.projectId] = project
+        }
         val response = CosmasProto.CreateVersionResponse
                 .newBuilder()
                 .build()

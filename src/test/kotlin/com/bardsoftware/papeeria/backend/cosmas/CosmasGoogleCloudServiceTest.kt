@@ -25,8 +25,8 @@ import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
 import org.mockito.Mockito
-import org.mockito.Mockito.mock
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
+import org.mockito.Mockito.*
 
 
 /**
@@ -176,6 +176,8 @@ class CosmasGoogleCloudServiceTest {
         commit()
         assertEquals("ver2", getFileFromService(0))
         assertEquals("ver4", getFileFromService(1))
+        verify(fakeStorage, never()).create(any(BlobInfo::class.java), eq("ver1".toByteArray()))
+        verify(fakeStorage, never()).create(any(BlobInfo::class.java), eq("ver3".toByteArray()))
     }
 
     @Test
@@ -249,9 +251,9 @@ class CosmasGoogleCloudServiceTest {
     }
 
 
-    private fun getMockedBlob(file: String, generation: Long = 0): Blob {
+    private fun getMockedBlob(fileContent: String, generation: Long = 0): Blob {
         val blob = mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(file.toByteArray())
+        Mockito.`when`(blob.getContent()).thenReturn(fileContent.toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
     }
