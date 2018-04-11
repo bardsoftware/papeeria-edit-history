@@ -150,6 +150,70 @@ class CosmasInMemoryServiceTest {
         this.service.createVersion(newVersionRequest, createVersionRecorder)
     }
 
+    private fun addPatchToService(text: String, user: String, fileId: String, time: Long) {
+        val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
+        val newPatchRequest = CosmasProto.CreatePatchRequest
+                .newBuilder()
+                .setUserId(user)
+                .setFileId(fileId)
+                .setText(text)
+                .setTimeStamp(time)
+                .build()
+        this.service.createPatch(newPatchRequest, createPatchRecorder)
+    }
+
+    private fun checkCorrect(user: String, text: String, time: Long, ans: CosmasInMemoryService.Patch?) : Boolean {
+        return ans != null && ans.user == user && ans.text == text && ans.timeStamp == time
+    }
+
+    @Test
+    fun addOnePatch() {
+        addPatchToService("Hey Jude, don't make it bad.", "The Beatles", "1", 1968)
+        val ans = service.getPatch(0, "1")
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't make it bad.", 1968, ans))
+    }
+
+    @Test
+    fun addManyPatchesOfOneFile() {
+        addPatchToService("Hey Jude, don't make it bad", "The Beatles", "1", 1968)
+        addPatchToService("Take a sad song and make it better", "The Beatles", "1", 1968)
+        addPatchToService("Remember to let her into your heart", "The Beatles", "1", 1968)
+        addPatchToService("Then you can start to make it better", "The Beatles", "1", 1968)
+        addPatchToService("Hey Jude, don't be afraid", "The Beatles", "1", 1968)
+        val ans0 = service.getPatch(0, "1")
+        val ans1 = service.getPatch(1, "1")
+        val ans2 = service.getPatch(2, "1")
+        val ans3 = service.getPatch(3, "1")
+        val ans4 = service.getPatch(4, "1")
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't make it bad", 1968, ans0))
+        assertTrue(checkCorrect("The Beatles", "Take a sad song and make it better", 1968, ans1))
+        assertTrue(checkCorrect("The Beatles", "Remember to let her into your heart", 1968, ans2))
+        assertTrue(checkCorrect("The Beatles", "Then you can start to make it better", 1968, ans3))
+        assertTrue(checkCorrect("The Beatles", "Hey Jude, don't be afraid", 1968, ans4))
+    }
+
+    @Test
+    fun addManyFilesWithManyPatches() {
+        addPatchToService("Hey Jude, don't make it bad", "The Beatles", "1", 1968)
+        addPatchToService("Take a sad song and make it better", "The Beatles", "1", 1968)
+        addPatchToService("Remember to let her into your heart", "The Beatles", "1", 1968)
+        addPatchToService("Then you can start to make it better", "The Beatles", "1", 1968)
+        addPatchToService("When I find myself in times of trouble", "The Beatles", "0", 1970)
+        addPatchToService("Mother Mary comes to me,", "The Beatles", "0", 1970)
+        addPatchToService("Speaking words of wisdom -", "The Beatles", "0", 1970)
+        addPatchToService("Let it be.", "The Beatles", "0", 1970)
+        addPatchToService("Help! I need somebody", "The Beatles", "3", 1965)
+        addPatchToService("Help! Not just anybody", "The Beatles", "3", 1965)
+        assertTrue(checkCorrect("The Beatles", "Remember to let her into your heart", 1968,
+                service.getPatch(2, "1")))
+        assertTrue(checkCorrect("The Beatles", "Let it be.", 1970,
+                service.getPatch(3, "0")))
+        assertTrue(checkCorrect("The Beatles", "Help! I need somebody", 1965,
+                service.getPatch(0, "3")))
+        assertFalse(checkCorrect("The Beatles", "Then you can start to make it better", 1968,
+                service.getPatch(3, "0")))
+    }
+  
     private fun getStreamRecorderForVersionList(fileId: String = "0", projectId: String = "0"):
             StreamRecorder<CosmasProto.FileVersionListResponse> {
         val listOfFileVersionsRecorder: StreamRecorder<CosmasProto.FileVersionListResponse> = StreamRecorder.create()

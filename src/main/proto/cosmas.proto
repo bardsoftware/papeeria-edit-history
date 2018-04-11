@@ -37,6 +37,16 @@ message CreateVersionRequest {
 message CreateVersionResponse {
 }
 
+message CreatePatchRequest {
+    string userId = 1;
+    string fileId = 2;
+    string text = 3;
+    int64 timeStamp = 4;
+}
+
+message CreatePatchResponse {
+}
+
 message FileVersionListRequest {
     string projectId = 1;
     string fileId = 2;
@@ -50,6 +60,8 @@ service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
     rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
+    }
+    rpc CreatePatch (CreatePatchRequest) returns (CreatePatchResponse) {
     }
     rpc FileVersionList (FileVersionListRequest) returns (FileVersionListResponse) {
     }
