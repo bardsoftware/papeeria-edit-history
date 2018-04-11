@@ -18,6 +18,9 @@ import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
+import org.slf4j.LoggerFactory
+
+private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
 
 /**
  * Special class that can work with requests from CosmasClient.
@@ -28,18 +31,18 @@ import io.grpc.stub.StreamObserver
 class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
-
     private val patches = mutableMapOf<String, MutableList<Patch>>()
 
     data class Patch(val user: String, val text: String, val timeStamp: Long)
+
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
-        println("Get request for list of versions file # ${request.fileId}")
+        LOG.info("Get request for list of versions file # ${request.fileId}")
         val fileVersions = this.files[request.fileId]
         if (fileVersions == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
-            println(status.description)
+            LOG.error(status.description)
             responseObserver.onError(StatusException(status))
             return
         }
@@ -51,7 +54,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        println("Get request for version ${request.version} file # ${request.fileId}")
+        LOG.info("Get request for version ${request.version} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(this.files) {
             val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
@@ -60,7 +63,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {
-                println("This request is incorrect: " + requestStatus.description)
+                LOG.error("This request is incorrect: " + requestStatus.description)
                 responseObserver.onError(StatusException(requestStatus))
             }
         }
@@ -69,16 +72,16 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
     private fun verifyGetVersionRequest(request: CosmasProto.GetVersionRequest): Pair<Status, List<ByteString>> {
         var status: Status = Status.OK
         val fileVersions = this.files[request.fileId]
-        when {
+        status = when {
             fileVersions == null ->
-                status = Status.INVALID_ARGUMENT.withDescription(
+                Status.INVALID_ARGUMENT.withDescription(
                         "There is no file in storage with file id ${request.fileId}")
             request.version >= fileVersions.size ->
-                status = Status.OUT_OF_RANGE.withDescription(
+                Status.OUT_OF_RANGE.withDescription(
                         "In storage this file has ${fileVersions.size} versions, " +
                                 "but you ask for version ${request.version}")
             request.version < 0 ->
-                status = Status.OUT_OF_RANGE.withDescription(
+                Status.OUT_OF_RANGE.withDescription(
                         "You ask for version ${request.version} that is negative")
             else -> return Pair(status, fileVersions)
         }
@@ -87,7 +90,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        println("Get request for create new version of file # ${request.fileId}")
+        LOG.info("Get request for create new version of file # ${request.fileId}")
         addNewVersion(request)
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
@@ -106,7 +109,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        println("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
         synchronized(this.patches) {
             val patchesList = patches[request.fileId] ?: mutableListOf()
             patchesList.add(Patch(request.userId, request.text, request.timeStamp))
@@ -119,7 +122,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         responseObserver.onCompleted()
     }
 
-    fun getPatch(version: Int, fileId: String) : Patch? {
+    fun getPatch(version: Int, fileId: String): Patch? {
         return patches[fileId]?.get(version)
     }
 }

@@ -21,14 +21,16 @@ import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
+
+private val LOG = LoggerFactory.getLogger("CosmasClient")
 
 /**
  * Simple client that will send a request to Cosmas server and wait for response
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasClient(host: String, port: Int) {
-
     private val channel: ManagedChannel = ManagedChannelBuilder.forAddress(host, port)
             .usePlaintext(true)
             .build()
@@ -36,7 +38,7 @@ class CosmasClient(host: String, port: Int) {
     private val blockingStub = newBlockingStub(this.channel)
 
     fun getVersion(version: Long) {
-        println("Ask for version: $version")
+        LOG.info("Ask for version: $version")
         addText()
         val request: GetVersionRequest = GetVersionRequest.newBuilder()
                 .setVersion(version)
@@ -44,7 +46,7 @@ class CosmasClient(host: String, port: Int) {
                 .setFileId("43")
                 .build()
         val response: GetVersionResponse = this.blockingStub.getVersion(request)
-        println("Get file: ${response.file.toStringUtf8()}")
+        LOG.info("Get file: ${response.file.toStringUtf8()}")
     }
 
     private fun addText() {
@@ -63,10 +65,11 @@ class CosmasClient(host: String, port: Int) {
 }
 
 fun main(args: Array<String>) {
+    val LOG = LoggerFactory.getLogger("client main")
     val arg = CosmasClientArgs(ArgParser(args))
-    println("Try to bind in host ${arg.serverHost} and port ${arg.serverPort}")
+    LOG.info("Try to bind in host ${arg.serverHost} and port ${arg.serverPort}")
     val client = CosmasClient(arg.serverHost, arg.serverPort)
-    println("Start working in host ${arg.serverHost} and port ${arg.serverPort}")
+    LOG.info("Start working in host ${arg.serverHost} and port ${arg.serverPort}")
     try {
         client.getVersion(0)
     } finally {
