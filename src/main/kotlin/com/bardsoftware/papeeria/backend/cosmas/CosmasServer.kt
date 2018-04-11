@@ -18,6 +18,7 @@ import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
+import org.slf4j.LoggerFactory
 
 /**
  * Simple server that will wait for request and will send response back.
@@ -49,15 +50,16 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 }
 
 fun main(args: Array<String>) {
+    val log = LoggerFactory.getLogger("main")
     val arg = CosmasServerArgs(ArgParser(args))
-    println("Try to bind in port ${arg.port}")
+    log.info("Try to bind in port ${arg.port}")
     val server =
             if (arg.bucket != "") {
                 CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
             } else {
                 CosmasServer(arg.port, CosmasInMemoryService())
             }
-    println("Start working in port ${arg.port}")
+    log.info("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
 }

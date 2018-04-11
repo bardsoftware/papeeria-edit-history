@@ -22,6 +22,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import org.slf4j.LoggerFactory
 
 /**
  * Special class that can work with requests from CosmasClient
@@ -32,10 +33,11 @@ import java.util.concurrent.ConcurrentMap
 class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
     private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, ByteString>>().withDefault { ConcurrentHashMap() }
+    private val log = LoggerFactory.getLogger(this::class.java)
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        println("Get request for create new version of file # ${request.fileId}")
+        log.info("Get request for create new version of file # ${request.fileId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
             project[request.fileId] = request.file
@@ -49,13 +51,13 @@ class CosmasGoogleCloudService(private val bucketName: String,
     }
 
     override fun commitVersion(request: CosmasProto.CommitVersionRequest, responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
-        println("Get request for commit last version of files in project # ${request.projectId}")
+        log.info("Get request for commit last version of files in project # ${request.projectId}")
         val project = this.fileBuffer[request.projectId]
 
         if (project == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no project in buffer with project id ${request.projectId}")
-            println(status.description)
+            log.error(status.description)
             responseObserver.onError(StatusException(status))
             return
         }
@@ -79,7 +81,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        println("Get request for version ${request.version} file # ${request.fileId}")
+        log.info("Get request for version ${request.version} file # ${request.fileId}")
         val blob: Blob? = try {
             this.storage.get(BlobInfo.newBuilder(this.bucketName, request.fileId).build().blobId,
                     Storage.BlobGetOption.generationMatch(request.version))
@@ -91,11 +93,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
         if (blob == null) {
             val requestStatus = Status.NOT_FOUND.withDescription(
                     "There is no such file or file version in storage")
-            println("This request is incorrect: " + requestStatus.description)
+            log.error("This request is incorrect: " + requestStatus.description)
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        println("Generation: ${blob.generation}")
         response.file = ByteString.copyFrom(blob.getContent())
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
@@ -103,7 +104,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
-        println("Get request for list of versions file # ${request.fileId}")
+        log.info("Get request for list of versions file # ${request.fileId}")
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         val blobs: Page<Blob> = try {
             this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
@@ -118,7 +119,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         if (response.versionsList.isEmpty()) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
-            println(status.description)
+            log.error(status.description)
             responseObserver.onError(StatusException(status))
             return
         }
@@ -127,16 +128,16 @@ class CosmasGoogleCloudService(private val bucketName: String,
     }
 
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
-        println("StorageException happened: ${e.message}")
+        log.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)
     }
 
     fun deleteFile(fileId: String) {
-        println("Delete file # $fileId")
+        log.info("Delete file # $fileId")
         try {
             this.storage.delete(BlobInfo.newBuilder(this.bucketName, fileId).build().blobId)
         } catch (e: StorageException) {
-            println("Deleting file failed: ${e.message}")
+            log.info("Deleting file failed: ${e.message}")
         }
     }
 }
