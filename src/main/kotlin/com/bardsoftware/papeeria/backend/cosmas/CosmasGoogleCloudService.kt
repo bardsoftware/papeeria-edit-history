@@ -20,6 +20,7 @@ import io.grpc.stub.StreamObserver
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Special class that can work with requests from CosmasClient
@@ -29,17 +30,15 @@ import io.grpc.StatusException
  */
 class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
-
-    private val fileBuffer = mutableMapOf<String, MutableMap<String, ByteString>>().withDefault { mutableMapOf() }
+    private val fileBuffer = ConcurrentHashMap<String, ConcurrentHashMap<String, ByteString>>().withDefault { ConcurrentHashMap() }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         println("Get request for create new version of file # ${request.fileId}")
-        synchronized(fileBuffer) {
-            val project = this.fileBuffer.getValue(request.projectId)
-            project[request.fileId] = request.file
-            this.fileBuffer[request.projectId] = project
-        }
+        val project = this.fileBuffer.getValue(request.projectId)
+        project[request.fileId] = request.file
+        this.fileBuffer[request.projectId] = project
+
         val response = CosmasProto.CreateVersionResponse
                 .newBuilder()
                 .build()
@@ -49,9 +48,8 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun commitVersion(request: CosmasProto.CommitVersionRequest, responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
         println("Get request for commit last version of files in project # ${request.projectId}")
-        val project = synchronized(fileBuffer) {
-            this.fileBuffer[request.projectId]
-        }
+        val project = this.fileBuffer[request.projectId]
+
         if (project == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no project in buffer with project id ${request.projectId}")
@@ -59,18 +57,17 @@ class CosmasGoogleCloudService(private val bucketName: String,
             responseObserver.onError(StatusException(status))
             return
         }
-        synchronized(project) {
-            try {
-                project.forEach { (fileId, file) ->
-                    this.storage.create(
-                            BlobInfo.newBuilder(this.bucketName, fileId).build(),
-                            file.toByteArray())
-                }
-            } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return
+        try {
+            project.forEach { (fileId, file) ->
+                this.storage.create(
+                        BlobInfo.newBuilder(this.bucketName, fileId).build(),
+                        file.toByteArray())
             }
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
         }
+
         val response = CosmasProto.CommitVersionResponse
                 .newBuilder()
                 .build()

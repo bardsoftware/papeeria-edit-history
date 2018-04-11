@@ -41,7 +41,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Before
     fun testInitialization() {
-        service = getServiceForTests()
+        this.service = getServiceForTests()
         println()
     }
 
