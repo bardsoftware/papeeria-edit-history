@@ -50,16 +50,16 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 }
 
 fun main(args: Array<String>) {
-    val log = LoggerFactory.getLogger("main")
+    val LOG = LoggerFactory.getLogger("server main")
     val arg = CosmasServerArgs(ArgParser(args))
-    log.info("Try to bind in port ${arg.port}")
+    LOG.info("Try to bind in port ${arg.port}")
     val server =
             if (arg.bucket != "") {
                 CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
             } else {
                 CosmasServer(arg.port, CosmasInMemoryService())
             }
-    log.info("Start working in port ${arg.port}")
+    LOG.info("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
 }

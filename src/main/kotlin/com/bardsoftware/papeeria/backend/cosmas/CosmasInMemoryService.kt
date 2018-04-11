@@ -20,6 +20,8 @@ import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
 
+private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
+
 /**
  * Special class that can work with requests from CosmasClient.
  * This realization stores files in RAM.
@@ -29,18 +31,18 @@ import org.slf4j.LoggerFactory
 class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     private val files = mutableMapOf<String, MutableList<ByteString>>()
-    private val log = LoggerFactory.getLogger(this::class.java)
     private val patches = mutableMapOf<String, MutableList<Patch>>()
 
     data class Patch(val user: String, val text: String, val timeStamp: Long)
+
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
-        log.info("Get request for list of versions file # ${request.fileId}")
+        LOG.info("Get request for list of versions file # ${request.fileId}")
         val fileVersions = this.files[request.fileId]
         if (fileVersions == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
-            log.error(status.description)
+            LOG.error(status.description)
             responseObserver.onError(StatusException(status))
             return
         }
@@ -52,7 +54,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        log.info("Get request for version ${request.version} file # ${request.fileId}")
+        LOG.info("Get request for version ${request.version} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(this.files) {
             val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
@@ -61,7 +63,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {
-                log.error("This request is incorrect: " + requestStatus.description)
+                LOG.error("This request is incorrect: " + requestStatus.description)
                 responseObserver.onError(StatusException(requestStatus))
             }
         }
@@ -88,7 +90,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        log.info("Get request for create new version of file # ${request.fileId}")
+        LOG.info("Get request for create new version of file # ${request.fileId}")
         addNewVersion(request)
         val response: CosmasProto.CreateVersionResponse = CosmasProto.CreateVersionResponse
                 .newBuilder()
@@ -107,7 +109,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        log.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
         synchronized(this.patches) {
             val patchesList = patches[request.fileId] ?: mutableListOf()
             patchesList.add(Patch(request.userId, request.text, request.timeStamp))
@@ -120,7 +122,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         responseObserver.onCompleted()
     }
 
-    fun getPatch(version: Int, fileId: String) : Patch? {
+    fun getPatch(version: Int, fileId: String): Patch? {
         return patches[fileId]?.get(version)
     }
 }
