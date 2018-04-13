@@ -16,13 +16,17 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
-import io.grpc.stub.StreamObserver
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
+import io.grpc.stub.StreamObserver
+import org.slf4j.LoggerFactory
+import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
-import org.slf4j.LoggerFactory
+import java.io.ByteArrayOutputStream
+import java.io.ObjectOutputStream
+
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
 
@@ -36,6 +40,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
 
     private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, ByteString>>().withDefault { ConcurrentHashMap() }
+    private val patchBuffer = ConcurrentHashMap<String, ConcurrentMap<String, MutableList<CosmasInMemoryService.Patch>>>().withDefault { ConcurrentHashMap() }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
@@ -52,9 +57,28 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
+    override fun createPatch(request: CosmasProto.CreatePatchRequest,
+                             responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
+        synchronized(this.patchBuffer) {
+            val project = this.patchBuffer.getValue(request.projectId)
+            val patchesList = project[request.fileId] ?: mutableListOf()
+            patchesList.add(CosmasInMemoryService.Patch(request.userId, request.text, request.timeStamp))
+            project[request.fileId] = patchesList
+            this.patchBuffer[request.projectId] = project
+        }
+        val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
+                .newBuilder()
+                .build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+
+    }
+
     override fun commitVersion(request: CosmasProto.CommitVersionRequest, responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
         LOG.info("Get request for commit last version of files in project # ${request.projectId}")
         val project = this.fileBuffer[request.projectId]
+        val patchProject = this.patchBuffer[request.projectId]
 
         if (project == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
@@ -68,6 +92,19 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
                         file.toByteArray())
+            }
+            if (patchProject != null) {
+                for ((fileId, patchList) in patchProject) {
+                    val outputStream = ByteArrayOutputStream()
+                    val output = ObjectOutputStream(outputStream)
+                    for (patch in patchList) {
+                        output.writeObject(patch)
+                    }
+                    this.storage.create(
+                            BlobInfo.newBuilder(this.bucketName, fileId).build(),
+                            outputStream.toByteArray())
+                    patchList.clear()
+                }
             }
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)

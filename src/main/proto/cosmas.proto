@@ -38,10 +38,11 @@ message CreateVersionResponse {
 }
 
 message CreatePatchRequest {
-    string userId = 1;
-    string fileId = 2;
-    string text = 3;
-    int64 timeStamp = 4;
+    string projectId = 1;
+    string userId = 2;
+    string fileId = 3;
+    string text = 4;
+    int64 timeStamp = 5;
 }
 
 message CreatePatchResponse {

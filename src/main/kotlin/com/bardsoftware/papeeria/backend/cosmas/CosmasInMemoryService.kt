@@ -19,6 +19,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
+import java.io.*
 
 private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
 
@@ -33,7 +34,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
     private val files = mutableMapOf<String, MutableList<ByteString>>()
     private val patches = mutableMapOf<String, MutableList<Patch>>()
 
-    data class Patch(val user: String, val text: String, val timeStamp: Long)
+    data class Patch(val user: String, val text: String, val timeStamp: Long) : Serializable
 
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
