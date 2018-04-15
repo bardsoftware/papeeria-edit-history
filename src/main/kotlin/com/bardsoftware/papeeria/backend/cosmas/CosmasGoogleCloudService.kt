@@ -21,11 +21,10 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
-import java.nio.ByteBuffer
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentMap
 import java.io.ByteArrayOutputStream
 import java.io.ObjectOutputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -72,7 +71,6 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 .build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
-
     }
 
     override fun commitVersion(request: CosmasProto.CommitVersionRequest, responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
@@ -80,6 +78,24 @@ class CosmasGoogleCloudService(private val bucketName: String,
         val project = this.fileBuffer[request.projectId]
         val patchProject = this.patchBuffer[request.projectId]
 
+        if (patchProject != null) {
+            try {
+                for ((fileId, patchList) in patchProject) {
+                    val outputStream = ByteArrayOutputStream()
+                    val output = ObjectOutputStream(outputStream)
+                    for (patch in patchList) {
+                        output.writeObject(patch)
+                    }
+                    this.storage.create(
+                            BlobInfo.newBuilder(this.bucketName, fileId).build(),
+                            outputStream.toByteArray())
+                    patchList.clear()
+                }
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
+            }
+        }
         if (project == null) {
             val status = Status.INVALID_ARGUMENT.withDescription(
                     "There is no project in buffer with project id ${request.projectId}")
@@ -92,19 +108,6 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
                         file.toByteArray())
-            }
-            if (patchProject != null) {
-                for ((fileId, patchList) in patchProject) {
-                    val outputStream = ByteArrayOutputStream()
-                    val output = ObjectOutputStream(outputStream)
-                    for (patch in patchList) {
-                        output.writeObject(patch)
-                    }
-                    this.storage.create(
-                            BlobInfo.newBuilder(this.bucketName, fileId).build(),
-                            outputStream.toByteArray())
-                    patchList.clear()
-                }
             }
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
@@ -178,5 +181,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
         } catch (e: StorageException) {
             LOG.info("Deleting file failed: ${e.message}")
         }
+    }
+
+    fun getPatchList(projectId: String, fileId: String): MutableList<CosmasInMemoryService.Patch>? {
+        return patchBuffer[projectId]?.get(fileId)
     }
 }

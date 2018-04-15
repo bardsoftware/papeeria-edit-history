@@ -200,6 +200,20 @@ class CosmasGoogleCloudServiceTest {
         assertNotNull(stream.error)
     }
 
+    @Test
+    fun simpleAddPatch() {
+        addPatchToService("abc", "-", "1", 1, "1")
+        commit("1")
+    }
+
+    @Test
+    fun checkEmptyList() {
+        addPatchToService("abc", "-", "1", 1, "1")
+        commit("1")
+        val list = this.service.getPatchList("1", "1")
+        assertEquals(0, list?.size)
+    }
+
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
         val (getVersionRecorder, getVersionRequest) = getStreamRecorderAndRequestForGettingVersion(version, fileId, projectId)
         this.service.getVersion(getVersionRequest, getVersionRecorder)
@@ -272,5 +286,18 @@ class CosmasGoogleCloudServiceTest {
     private fun commit(projectId: String = "0") {
         val (commitRecorder, commitRequest) = getStreamRecorderAndRequestForCommitVersions(projectId)
         this.service.commitVersion(commitRequest, commitRecorder)
+    }
+
+    private fun addPatchToService(text: String, user: String, fileId: String, time: Long, projectId: String) {
+        val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
+        val newPatchRequest = CosmasProto.CreatePatchRequest
+                .newBuilder()
+                .setProjectId(projectId)
+                .setUserId(user)
+                .setFileId(fileId)
+                .setText(text)
+                .setTimeStamp(time)
+                .build()
+        this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
 }
