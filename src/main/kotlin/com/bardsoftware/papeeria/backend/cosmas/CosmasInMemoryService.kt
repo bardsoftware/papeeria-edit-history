@@ -19,7 +19,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
-import java.io.*
+import java.io.Serializable
 
 private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
 

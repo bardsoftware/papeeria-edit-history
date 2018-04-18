@@ -27,6 +27,8 @@ import org.mockito.Matchers.eq
 import org.mockito.Mockito
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import org.mockito.Mockito.*
+import java.io.ByteArrayOutputStream
+import java.io.ObjectOutputStream
 
 
 /**
@@ -202,16 +204,47 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun simpleAddPatch() {
+        createVersion("file", "1", "1")
         addPatchToService("abc", "-", "1", 1, "1")
         commit("1")
     }
 
     @Test
     fun checkEmptyList() {
+        createVersion("file", "1", "1")
         addPatchToService("abc", "-", "1", 1, "1")
         commit("1")
+        createVersion("file1", "1", "1")
         val list = this.service.getPatchList("1", "1")
         assertEquals(0, list?.size)
+    }
+
+    @Test
+    fun getPatchSimple() {
+        createVersion("file", "1", "1")
+        addPatchToService("abc", "-", "1", 1, "1")
+        addPatchToService("abc1", "-1", "1", 12, "1")
+        commit("1")
+        val list = this.service.getPatchListFromMemory("1", 0)
+        assertEquals(CosmasInMemoryService.Patch("-", "abc", 1), list?.get(0))
+        assertEquals(CosmasInMemoryService.Patch("-1", "abc1", 12), list?.get(1))
+    }
+
+    @Test
+    fun getPatchManyVersions() {
+        createVersion("file", "1", "1")
+        addPatchToService("abc", "-", "1", 1, "1")
+        addPatchToService("abc1", "-1", "1", 12, "1")
+        commit("1")
+        createVersion("file2", "1", "1")
+        addPatchToService("abcd", "-d", "1", 13, "1")
+        addPatchToService("abcd1", "-d1", "1", 14, "1")
+        commit("1")
+        assertEquals(getFileFromService(0, "1", "1"), getFileFromService(1, "1", "1"))
+        val list = this.service.getPatchListFromMemory("1", 1)
+        assertEquals(CosmasInMemoryService.Patch("-d", "abcd", 13), list?.get(0))
+        assertEquals(CosmasInMemoryService.Patch("-d1", "abcd1", 14), list?.get(1))
+        assertEquals(2, list?.size)
     }
 
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
@@ -266,8 +299,11 @@ class CosmasGoogleCloudServiceTest {
 
 
     private fun getMockedBlob(fileContent: String, generation: Long = 0): Blob {
+        val outputStream = ByteArrayOutputStream()
+        val output = ObjectOutputStream(outputStream)
+        output.writeObject(Pair<ByteString, MutableList<CosmasInMemoryService.Patch>>(ByteString.copyFrom(fileContent.toByteArray()), mutableListOf()))
         val blob = mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(fileContent.toByteArray())
+        Mockito.`when`(blob.getContent()).thenReturn(outputStream.toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
     }
