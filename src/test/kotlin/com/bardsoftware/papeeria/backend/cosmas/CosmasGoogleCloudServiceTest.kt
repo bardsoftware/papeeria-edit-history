@@ -301,7 +301,7 @@ class CosmasGoogleCloudServiceTest {
     private fun getMockedBlob(fileContent: String, generation: Long = 0): Blob {
         val outputStream = ByteArrayOutputStream()
         val output = ObjectOutputStream(outputStream)
-        output.writeObject(Pair<ByteString, MutableList<CosmasInMemoryService.Patch>>(ByteString.copyFrom(fileContent.toByteArray()), mutableListOf()))
+        output.writeObject(CosmasGoogleCloudService.FileStructure(ByteString.copyFrom(fileContent.toByteArray()), mutableListOf()))
         val blob = mock(Blob::class.java)
         Mockito.`when`(blob.getContent()).thenReturn(outputStream.toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
