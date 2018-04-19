@@ -14,21 +14,20 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
+import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
-import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
 import org.mockito.Mockito
-import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import org.mockito.Mockito.*
-import java.io.ByteArrayOutputStream
-import java.io.ObjectOutputStream
 
 
 /**
@@ -226,8 +225,12 @@ class CosmasGoogleCloudServiceTest {
         addPatchToService("abc1", "-1", "1", 12, "1")
         commit("1")
         val list = this.service.getPatchListFromMemory("1", 0)
-        assertEquals(CosmasInMemoryService.Patch("-", "abc", 1), list?.get(0))
-        assertEquals(CosmasInMemoryService.Patch("-1", "abc1", 12), list?.get(1))
+        assertEquals("abc", list?.get(0)?.text)
+        assertEquals("-", list?.get(0)?.userId)
+        assertEquals("abc1", list?.get(1)?.text)
+        assertEquals("-1", list?.get(1)?.userId)
+        assertEquals(1L, list?.get(0)?.timeStamp)
+        assertEquals(12L, list?.get(1)?.timeStamp)
     }
 
     @Test
@@ -242,8 +245,12 @@ class CosmasGoogleCloudServiceTest {
         commit("1")
         assertEquals(getFileFromService(0, "1", "1"), getFileFromService(1, "1", "1"))
         val list = this.service.getPatchListFromMemory("1", 1)
-        assertEquals(CosmasInMemoryService.Patch("-d", "abcd", 13), list?.get(0))
-        assertEquals(CosmasInMemoryService.Patch("-d1", "abcd1", 14), list?.get(1))
+        assertEquals("abcd", list?.get(0)?.text)
+        assertEquals("-d", list?.get(0)?.userId)
+        assertEquals("abcd1", list?.get(1)?.text)
+        assertEquals("-d1", list?.get(1)?.userId)
+        assertEquals(13L, list?.get(0)?.timeStamp)
+        assertEquals(14L, list?.get(1)?.timeStamp)
         assertEquals(2, list?.size)
     }
 
@@ -299,11 +306,8 @@ class CosmasGoogleCloudServiceTest {
 
 
     private fun getMockedBlob(fileContent: String, generation: Long = 0): Blob {
-        val outputStream = ByteArrayOutputStream()
-        val output = ObjectOutputStream(outputStream)
-        output.writeObject(CosmasGoogleCloudService.FileStructure(ByteString.copyFrom(fileContent.toByteArray()), mutableListOf()))
         val blob = mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(outputStream.toByteArray())
+        Mockito.`when`(blob.getContent()).thenReturn(FileInformation.newBuilder().setFile(ByteString.copyFrom(fileContent.toByteArray())).build().toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
     }

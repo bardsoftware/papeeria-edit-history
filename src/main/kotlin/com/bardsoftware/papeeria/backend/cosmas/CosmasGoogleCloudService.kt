@@ -21,10 +21,6 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.ObjectInputStream
-import java.io.ObjectOutputStream
 import java.io.Serializable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -40,16 +36,14 @@ private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
 class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
 
-    private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, FileStructure>>().withDefault { ConcurrentHashMap() }
-
-    data class FileStructure(val fileContent : ByteString, val patchesList : MutableList<CosmasInMemoryService.Patch>) : Serializable
+    private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileInformation>>().withDefault { ConcurrentHashMap() }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
         LOG.info("Get request for create new version of file # ${request.fileId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
-            project[request.fileId] = FileStructure(request.file, mutableListOf())
+            project[request.fileId] = CosmasProto.FileInformation.newBuilder().setFile(request.file).addAllPatches(mutableListOf()).build()
             this.fileBuffer[request.projectId] = project
         }
         val response = CosmasProto.CreateVersionResponse
@@ -64,10 +58,14 @@ class CosmasGoogleCloudService(private val bucketName: String,
         LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
+            val newPatch = CosmasProto.FileInformation.Patch.newBuilder().setText(request.text)
+                    .setTimeStamp(request.timeStamp).setUserId(request.userId).build()
             val fileInformation = project[request.fileId]
-            fileInformation?.patchesList?.add(CosmasInMemoryService.Patch(request.userId, request.text, request.timeStamp))
-            project[request.fileId] = fileInformation
-            this.fileBuffer[request.projectId] = project
+            if (fileInformation != null) {
+                project[request.fileId] = CosmasProto.FileInformation.newBuilder()
+                        .setFile(fileInformation.file).addAllPatches(fileInformation.patchesList).addPatches(newPatch).build()
+                this.fileBuffer[request.projectId] = project
+            }
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
@@ -88,13 +86,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
         try {
             for ((fileId, fileStorage) in project) {
-                val outputStream = ByteArrayOutputStream()
-                val output = ObjectOutputStream(outputStream)
-                output.writeObject(fileStorage)
-                output.flush()
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
-                        outputStream.toByteArray())
+                        fileStorage.toByteArray())
             }
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
@@ -126,12 +120,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        val ans = blob.getContent()
-        val inputStream = ByteArrayInputStream(ans)
-        val input = ObjectInputStream(inputStream)
-        val fileStorage = input.readObject()
-        if (fileStorage is FileStructure)
-            response.file = fileStorage.fileContent
+        response.file = CosmasProto.FileInformation.parseFrom(blob.getContent()).file
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
@@ -175,23 +164,17 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
     }
 
-    fun getPatchList(projectId: String, fileId: String): MutableList<CosmasInMemoryService.Patch>? {
+    fun getPatchList(projectId: String, fileId: String): MutableList<CosmasProto.FileInformation.Patch>? {
         return fileBuffer[projectId]?.get(fileId)?.patchesList
     }
 
-    fun getPatchListFromMemory(fileId: String, version: Long): MutableList<CosmasInMemoryService.Patch>? {
+    fun getPatchListFromMemory(fileId: String, version: Long): MutableList<CosmasProto.FileInformation.Patch>? {
         val blob: Blob? = try {
             this.storage.get(BlobInfo.newBuilder(this.bucketName, fileId).build().blobId,
                     Storage.BlobGetOption.generationMatch(version))
         } catch (e: StorageException) {
             return null
         }
-        val ans = blob?.getContent()
-        val inputStream = ByteArrayInputStream(ans)
-        val input = ObjectInputStream(inputStream)
-        val fileStorage = input.readObject()
-        if (fileStorage is FileStructure)
-            return fileStorage.patchesList
-        return null
+        return CosmasProto.FileInformation.parseFrom(blob?.getContent()).patchesList
     }
 }
