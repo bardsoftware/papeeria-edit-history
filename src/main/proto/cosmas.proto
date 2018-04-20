@@ -37,12 +37,17 @@ message CreateVersionRequest {
 message CreateVersionResponse {
 }
 
+
+message Patch {
+    string userId = 1;
+    string text = 2;
+    int64 timeStamp = 3;
+}
+
 message CreatePatchRequest {
     string projectId = 1;
-    string userId = 2;
+    Patch patch = 2;
     string fileId = 3;
-    string text = 4;
-    int64 timeStamp = 5;
 }
 
 message CreatePatchResponse {
@@ -65,14 +70,9 @@ message CommitVersionResponse {
 
 }
 
-message FileInformation {
-    message Patch {
-        string userId = 1;
-        string text = 2;
-        int64 timeStamp = 3;
-    }
+message FileVersion {
     repeated Patch patches = 1;
-    bytes file = 2;
+    bytes content = 2;
 }
 
 service Cosmas {

@@ -34,7 +34,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
     private val files = mutableMapOf<String, MutableList<ByteString>>()
     private val patches = mutableMapOf<String, MutableList<Patch>>()
 
-    data class Patch(val user: String, val text: String, val timeStamp: Long) : Serializable
+    data class Patch(val user: String, val text: String, val timeStamp: Long)
 
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
@@ -110,10 +110,10 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patch.userId}")
         synchronized(this.patches) {
             val patchesList = patches[request.fileId] ?: mutableListOf()
-            patchesList.add(Patch(request.userId, request.text, request.timeStamp))
+            patchesList.add(Patch(request.patch.userId, request.patch.text, request.patch.timeStamp))
             patches[request.fileId] = patchesList
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
