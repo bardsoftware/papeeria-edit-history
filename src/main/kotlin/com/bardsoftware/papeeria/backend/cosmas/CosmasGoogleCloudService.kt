@@ -41,7 +41,11 @@ class CosmasGoogleCloudService(private val bucketName: String,
         LOG.info("Get request for create new version of file # ${request.fileId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
-            project[request.fileId] = CosmasProto.FileVersion.newBuilder().setContent(request.file).addAllPatches(project[request.fileId]?.patchesList ?: mutableListOf()).build()
+            val patchList = project[request.fileId]?.patchesList ?: mutableListOf()
+            project[request.fileId] = CosmasProto.FileVersion.newBuilder()
+                    .setContent(request.file)
+                    .addAllPatches(patchList)
+                    .build()
             this.fileBuffer[request.projectId] = project
         }
         val response = CosmasProto.CreateVersionResponse
@@ -56,11 +60,13 @@ class CosmasGoogleCloudService(private val bucketName: String,
         LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patch.userId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
-            val fileInformation = project[request.fileId]
-            if (fileInformation != null) {
-                project[request.fileId] = fileInformation.toBuilder().addPatches(request.patch).build()
-                this.fileBuffer[request.projectId] = project
+            val fileVersion = project[request.fileId]
+            if (fileVersion != null) {
+                project[request.fileId] = fileVersion.toBuilder().addPatches(request.patch).build()
+            } else {
+                project[request.fileId] = CosmasProto.FileVersion.newBuilder().addPatches(request.patch).build()
             }
+            this.fileBuffer[request.projectId] = project
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
@@ -84,8 +90,8 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
                         fileVersion.toByteArray())
-                project[fileId] = fileVersion.toBuilder().clearPatches().build()
             }
+            project.clear()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return

@@ -205,16 +205,18 @@ class CosmasGoogleCloudServiceTest {
         createVersion("file", "1", "1")
         addPatchToService("abc", "-", "1", 1, "1")
         val list = this.service.getPatchList("1", "1")
-        assertFalse(list == null)
+        assertNotNull(list)
         assertEquals(1, list!!.size)
         assertEquals("abc", list[0].text)
         assertEquals("-", list[0].userId)
         assertEquals(1L, list[0].timeStamp)
         commit("1")
+        val listNull = this.service.getPatchList("1", "1")
+        assertNull(listNull)
         createVersion("fileNew", "1", "1")
         addPatchToService("abcNew", "-New", "1", 10, "1")
         val list1 = this.service.getPatchList("1", "1")
-        assertFalse(list1 == null)
+        assertNotNull(list1)
         assertEquals(1, list1!!.size)
         assertEquals("abcNew", list1[0].text)
         assertEquals("-New", list1[0].userId)
@@ -226,6 +228,8 @@ class CosmasGoogleCloudServiceTest {
         createVersion("file", "1", "1")
         addPatchToService("abc", "-", "1", 1, "1")
         commit("1")
+        val listNull = this.service.getPatchList("1", "1")
+        assertNull(listNull)
         createVersion("file1", "1", "1")
         val list = this.service.getPatchList("1", "1")
         assertEquals(0, list!!.size)
@@ -235,16 +239,22 @@ class CosmasGoogleCloudServiceTest {
     fun addPatchTest() {
         val listPatch1 = mutableListOf<Patch>()
         val listPatch2 = mutableListOf<Patch>()
-        val patch1 = CosmasProto.Patch.newBuilder().setText("patch1").setUserId("-1").setTimeStamp(1).build()
-        val patch2 = CosmasProto.Patch.newBuilder().setText("patch2").setUserId("-2").setTimeStamp(2).build()
-        val patch3 = CosmasProto.Patch.newBuilder().setText("patch3").setUserId("-3").setTimeStamp(3).build()
-        val patch4 = CosmasProto.Patch.newBuilder().setText("patch4").setUserId("-4").setTimeStamp(4).build()
+        val patch1 = newPatch("-1","patch1",1)
+        val patch2 = newPatch("-2","patch2",2)
+        val patch3 = newPatch("-3","patch3",3)
+        val patch4 = newPatch("-4","patch4",4)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         listPatch2.add(patch3)
         listPatch2.add(patch4)
-        val fileVersion1 = CosmasProto.FileVersion.newBuilder().setContent(ByteString.copyFrom("ver1".toByteArray())).addAllPatches(listPatch1).build()
-        val fileVersion2 = CosmasProto.FileVersion.newBuilder().setContent(ByteString.copyFrom("ver2".toByteArray())).addAllPatches(listPatch2).build()
+        val fileVersion1 = CosmasProto.FileVersion.newBuilder()
+                .setContent(ByteString.copyFrom("ver1".toByteArray()))
+                .addAllPatches(listPatch1)
+                .build()
+        val fileVersion2 = CosmasProto.FileVersion.newBuilder()
+                .setContent(ByteString.copyFrom("ver2".toByteArray()))
+                .addAllPatches(listPatch2)
+                .build()
         val fakeStorage: Storage = mock(Storage::class.java)
         val blob1 = getMockedBlobWithPatch("ver1", 0, listPatch1)
         val blob2 = getMockedBlobWithPatch("ver2", 1, listPatch2)
@@ -268,8 +278,8 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun getPatchSimple() {
         val listPatch1 = mutableListOf<Patch>()
-        val patch1 = CosmasProto.Patch.newBuilder().setText("patch1").setUserId("-1").setTimeStamp(1).build()
-        val patch2 = CosmasProto.Patch.newBuilder().setText("patch2").setUserId("-2").setTimeStamp(2).build()
+        val patch1 = newPatch("-1","patch1",1)
+        val patch2 = newPatch("-2","patch2",2)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         val fakeStorage: Storage = mock(Storage::class.java)
@@ -280,18 +290,18 @@ class CosmasGoogleCloudServiceTest {
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val list = this.service.getPatchListFromStorage("1", 0)
         assertEquals(2, list!!.size)
-        assertTrue(checkCorrect("-1", "patch1", 1, list[0]))
-        assertTrue(checkCorrect("-2", "patch2", 2, list[1]))
+        assertEquals(newPatch("-1", "patch1", 1), list[0])
+        assertEquals(newPatch("-2", "patch2", 2), list[1])
     }
 
     @Test
     fun getPatchManyVersions() {
         val listPatch1 = mutableListOf<Patch>()
         val listPatch2 = mutableListOf<Patch>()
-        val patch1 = CosmasProto.Patch.newBuilder().setText("patch1").setUserId("-1").setTimeStamp(1).build()
-        val patch2 = CosmasProto.Patch.newBuilder().setText("patch2").setUserId("-2").setTimeStamp(2).build()
-        val patch3 = CosmasProto.Patch.newBuilder().setText("patch3").setUserId("-3").setTimeStamp(3).build()
-        val patch4 = CosmasProto.Patch.newBuilder().setText("patch4").setUserId("-4").setTimeStamp(4).build()
+        val patch1 = newPatch("-1","patch1",1)
+        val patch2 = newPatch("-2","patch2",2)
+        val patch3 = newPatch("-3","patch3",3)
+        val patch4 = newPatch("-4","patch4",4)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         listPatch2.add(patch3)
@@ -306,10 +316,10 @@ class CosmasGoogleCloudServiceTest {
         val list1 = this.service.getPatchListFromStorage("1", 0)
         val list2 = this.service.getPatchListFromStorage("1", 1)
         assertEquals(2, list1!!.size)
-        assertTrue(checkCorrect("-1", "patch1", 1, list1[0]))
-        assertTrue(checkCorrect("-2", "patch2", 2, list1[1]))
-        assertTrue(checkCorrect("-3", "patch3", 3, list2!![0]))
-        assertTrue(checkCorrect("-4", "patch4", 4, list2[1]))
+        assertEquals(newPatch("-1", "patch1", 1), list1[0])
+        assertEquals(newPatch("-2", "patch2", 2), list1[1])
+        assertEquals(newPatch("-3", "patch3", 3), list2!![0])
+        assertEquals(newPatch("-4", "patch4", 4), list2[1])
     }
 
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
@@ -365,7 +375,9 @@ class CosmasGoogleCloudServiceTest {
 
     private fun getMockedBlob(fileContent: String, generation: Long = 0): Blob {
         val blob = mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(FileVersion.newBuilder().setContent(ByteString.copyFrom(fileContent.toByteArray())).build().toByteArray())
+        Mockito.`when`(blob.getContent()).thenReturn(
+                FileVersion.newBuilder().setContent(
+                        ByteString.copyFrom(fileContent.toByteArray())).build().toByteArray())
         Mockito.`when`(blob.generation).thenReturn(generation)
         return blob
     }
@@ -393,11 +405,10 @@ class CosmasGoogleCloudServiceTest {
         this.service.commitVersion(commitRequest, commitRecorder)
     }
 
-    private fun addPatchToService(text: String, user: String, fileId: String, time: Long, projectId: String) {
+    private fun addPatchToService(text: String, userId: String, fileId: String, timeStamp: Long, projectId: String) {
         val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
-        val newPatch = CosmasProto.Patch.newBuilder().setUserId(user).setText(text).setTimeStamp(time).build()
-        val newPatchRequest = CosmasProto.CreatePatchRequest
-                .newBuilder()
+        val newPatch = newPatch(userId, text, timeStamp)
+        val newPatchRequest = CosmasProto.CreatePatchRequest.newBuilder()
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .setPatch(newPatch)
@@ -405,8 +416,7 @@ class CosmasGoogleCloudServiceTest {
         this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
 
-    private fun checkCorrect(user: String, text: String, time: Long, ans: CosmasProto.Patch?) : Boolean {
-        return ans != null && ans.userId == user && ans.text == text && ans.timeStamp == time
+    private fun newPatch(userId: String, text: String, timeStamp: Long) : CosmasProto.Patch {
+        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimeStamp(timeStamp).build()
     }
-
 }
