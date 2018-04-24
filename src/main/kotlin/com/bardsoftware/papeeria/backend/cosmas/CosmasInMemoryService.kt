@@ -19,6 +19,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
+import java.io.Serializable
 
 private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
 
@@ -109,10 +110,10 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patch.userId}")
         synchronized(this.patches) {
             val patchesList = patches[request.fileId] ?: mutableListOf()
-            patchesList.add(Patch(request.userId, request.text, request.timeStamp))
+            patchesList.add(Patch(request.patch.userId, request.patch.text, request.patch.timeStamp))
             patches[request.fileId] = patchesList
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
