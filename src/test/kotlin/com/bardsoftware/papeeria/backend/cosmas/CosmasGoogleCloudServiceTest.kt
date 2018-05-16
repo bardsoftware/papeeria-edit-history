@@ -369,7 +369,7 @@ class CosmasGoogleCloudServiceTest {
     private fun getVersionsList(fileId: String = "0", projectId: String = "0"): List<Long> {
         val (listVersionsRecorder, listVersionsRequest) = getStreamRecorderAndRequestForVersionList(fileId, projectId)
         this.service.fileVersionList(listVersionsRequest, listVersionsRecorder)
-        return listVersionsRecorder.values[0].versionsList
+        return listVersionsRecorder.values[0].versionsList.map { e -> e.generation }
     }
 
 

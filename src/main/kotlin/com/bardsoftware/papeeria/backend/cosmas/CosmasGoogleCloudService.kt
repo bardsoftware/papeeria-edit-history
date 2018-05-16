@@ -139,7 +139,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
             return
         }
         blobs.iterateAll().forEach {
-            response.addVersions(it.generation)
+            val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
+                    .setGeneration(it.generation)
+                    .setTimestamp(it.createTime)
+            response.addVersions(versionInfo.build())
         }
         if (response.versionsList.isEmpty()) {
             val status = Status.INVALID_ARGUMENT.withDescription(

@@ -48,7 +48,14 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             return
         }
         val response = CosmasProto.FileVersionListResponse.newBuilder()
-        response.addAllVersions(0L until fileVersions.size)
+        val versionsInfo = mutableListOf<CosmasProto.FileVersionInfo>()
+        for (generation in 0L until fileVersions.size) {
+            val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
+                    .setGeneration(generation)
+                    .setTimestamp(generation)
+            response.addVersions(versionInfo.build())
+        }
+        response.addAllVersions(versionsInfo)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
