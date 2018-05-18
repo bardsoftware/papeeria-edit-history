@@ -1,14 +1,31 @@
+/**
+Copyright 2018 BarD Software s.r.o
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+
 package com.bardsoftware.papeeria.backend.cosmas
 import java.util.LinkedList
-import diff_match_patch
+import name.fraser.neil.plaintext.diff_match_patch
 
-class PatchCorrector {
+object PatchCorrector {
     private fun getReverseOperation(operation: diff_match_patch.Operation): diff_match_patch.Operation {
-        if (operation == diff_match_patch.Operation.DELETE)
-            return diff_match_patch.Operation.INSERT
-        if (operation == diff_match_patch.Operation.INSERT)
-            return diff_match_patch.Operation.DELETE
-        return operation
+        return when (operation) {
+            diff_match_patch.Operation.DELETE -> diff_match_patch.Operation.INSERT
+            diff_match_patch.Operation.INSERT -> diff_match_patch.Operation.DELETE
+            else -> {
+                diff_match_patch.Operation.EQUAL
+            }
+        }
     }
 
     fun reversePatch(patchList: LinkedList<diff_match_patch.Patch>): LinkedList<diff_match_patch.Patch> {
@@ -27,32 +44,25 @@ class PatchCorrector {
         return reversePatchList
     }
 
-    fun deletePatch(patchForDelete: LinkedList<diff_match_patch.Patch>,
-                    patchList: List<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
+    fun deletePatch(deletedPatch: LinkedList<diff_match_patch.Patch>,
+                    nextPatches: List<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
         val dmp = diff_match_patch()
-        var currentVersionOfText = text
-        val listOfPatches = LinkedList<diff_match_patch.Patch>()
-        var listOfReversePatches = LinkedList<diff_match_patch.Patch>()
-        listOfReversePatches.addAll(reversePatch(patchForDelete))
-        for (patch in patchList) {
-            listOfPatches.clear()
-            listOfPatches.add(patch)
-            val nextVersion = dmp.patch_apply(listOfPatches, currentVersionOfText)
-            val nextVersionWithoutPatch = dmp.patch_apply(listOfReversePatches, nextVersion[0] as String)
-            var successful = true
-            for (result in nextVersion[1] as BooleanArray) {
-                successful = successful && result
-            }
-            for (result in nextVersionWithoutPatch[1] as BooleanArray) {
-                successful = successful && result
-            }
-            if (!successful) {
+        var textVersion = text
+        val applyList = LinkedList<diff_match_patch.Patch>()
+        var reversePatches = LinkedList<diff_match_patch.Patch>()
+        reversePatches.addAll(reversePatch(deletedPatch))
+        for (patch in nextPatches) {
+            applyList.clear()
+            applyList.add(patch)
+            val nextVersion = dmp.patch_apply(applyList, textVersion)
+            val nextVersionWithoutPatch = dmp.patch_apply(reversePatches, nextVersion[0] as String)
+            if ((nextVersion[1] as BooleanArray).any { !it } || (nextVersionWithoutPatch[1] as BooleanArray).any { !it }) {
                 throw DeletePatchException("Failure in patch apply")
             }
-            listOfReversePatches = dmp.patch_make(nextVersion[0] as String, nextVersionWithoutPatch[0] as String)
-            currentVersionOfText = nextVersion[0] as String
+            reversePatches = dmp.patch_make(nextVersion[0] as String, nextVersionWithoutPatch[0] as String)
+            textVersion = nextVersion[0] as String
         }
-        return listOfReversePatches
+        return reversePatches
     }
 
     public class DeletePatchException(message: String) : Throwable(message)
