@@ -67,7 +67,10 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         synchronized(this.files) {
             val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
-                response.file = fileVersions[request.version.toInt()]
+                val fileVersion = CosmasProto.FileVersion.newBuilder()
+                        .setContent(fileVersions[request.version.toInt()])
+                        .build()
+                response.file = fileVersion
                 responseObserver.onNext(response.build())
                 responseObserver.onCompleted()
             } else {

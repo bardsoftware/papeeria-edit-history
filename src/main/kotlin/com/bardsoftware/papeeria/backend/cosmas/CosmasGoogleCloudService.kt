@@ -122,7 +122,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        response.file = CosmasProto.FileVersion.parseFrom(blob.getContent()).content
+        response.file = CosmasProto.FileVersion.parseFrom(blob.getContent())
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }

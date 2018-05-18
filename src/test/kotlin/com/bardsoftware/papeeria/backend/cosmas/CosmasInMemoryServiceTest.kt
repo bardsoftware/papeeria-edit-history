@@ -123,7 +123,7 @@ class CosmasInMemoryServiceTest {
     }
 
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): ByteString {
-        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file
+        return getStreamRecorderWithResult(version, fileId, projectId).values[0].file.content
     }
 
     private fun getStreamRecorderWithResult(version: Long, fileId: String = "0", projectId: String = "0"):
