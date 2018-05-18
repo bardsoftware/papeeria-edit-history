@@ -89,16 +89,16 @@ class PatchCorrectorTest {
 
     @Test
     fun bigFileChangeWorld() {
-        val text1 = """"Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing
+        val text1 = """Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing
             | to do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations
             | in it, ‘and what is the use of a book,’ thought Alice ‘without pictures or conversation?’""".trimMargin().replace("\n","")
-        val text2 = """"Ann was beginning to get very tired of sitting by her sister on the bank, and of having nothing to
+        val text2 = """Ann was beginning to get very tired of sitting by her sister on the bank, and of having nothing to
             | do: once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations
             | in it, ‘and what is the use of a book,’ thought Ann ‘without pictures or conversation?’""".trimMargin().replace("\n","")
         val text3 =  """Ann was beginning to get very tired : once or twice she had peeped into the book her sister was
             | reading, but it had no pictures or conversations in it, ‘and what is the use of a book,’ thought Ann
             | ‘without pictures or conversation?’""".trimMargin().replace("\n","")
-        val text4 = """"Ann was very tired : once or twice she had peeped into the book her sister was reading, but it
+        val text4 = """Ann was very tired : once or twice she had peeped into the book her sister was reading, but it
             | had no pictures or conversations in it, ‘and what is the use of a book,’ thought Ann ‘without pictures or
             | conversation?’""".trimMargin().replace("\n","")
         val text5 = """Ann was very tired and upset: once or twice she had peeped into the book her sister was reading,
@@ -114,5 +114,106 @@ class PatchCorrectorTest {
         assertEquals("""Alice was very tired and upset: once or twice she had peeped into the book her sister was
              | reading, but it had no pictures or conversations in it, ‘and what is the use of a book,’ thought Alice ‘without
              | pictures or conversation?’""".trimMargin().replace("\n",""), res[0])
+    }
+
+    @Test
+    fun multiLinesTest() {
+        val text1 = """Hey Jude, don't make it bad
+            |Take a sad song and make it better""".trimMargin()
+        val text2 =  """Hey Jude, don't make it bad
+            |Take a sad song and make it better
+            |Remember to let her into your heart
+            |Then you can start to make it better""".trimMargin()
+        val text3 = """Hey Jude, don't make it bad
+            |Take a sad song and make it better
+            |Remember to let her into your heart
+            |Then you can start to make it better
+            |Hey Jude, don't be afraid
+            |You were made to go out and get her""".trimMargin()
+        val text4 = """Hey Jude, don't make it bad
+            |Take a sad song and make it better
+            |Remember to let her into your heart
+            |Then you can start to make it better
+            |Hey Jude, don't be afraid
+            |You were made to go out and get her
+            |The minute you let her under your skin
+            |Then you begin to make it better""".trimMargin()
+        val dmp = diff_match_patch()
+        val patchForDelete = dmp.patch_make(text1, text2)
+        val patch = dmp.patch_make(text2, text3)
+        patch.addAll(dmp.patch_make(text3, text4))
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val res = dmp.patch_apply(deletePatch, text4)
+        assertEquals("""Hey Jude, don't make it bad
+            |Take a sad song and make it better
+            |Hey Jude, don't be afraid
+            |You were made to go out and get her
+            |The minute you let her under your skin
+            |Then you begin to make it better""".trimMargin(), res[0])
+    }
+
+    @Test
+    fun multiLineReplaceString() {
+        val text1 = """Imagine there's no heaven
+            |It's easy if you try
+            |No hell below us
+            |Above us only sky
+            |Imagine all the people living for today""".trimMargin()
+        val text2 = """Imagine there's no heaven
+            |It's easy if you try
+            |No hell below us
+            |Above us only sky
+            |Imagine all the people living life in peace""".trimMargin()
+        val text3 = """Imagine there's no countries
+            |It isn't hard to do
+            |No hell below us
+            |Above us only sky
+            |Imagine all the people living life in peace""".trimMargin()
+        val text4 = """Imagine there's no countries
+            |It isn't hard to do
+            |Nothing to kill or die for
+            |And no religion too
+            |Imagine all the people living life in peace""".trimMargin()
+        val dmp = diff_match_patch()
+        val patchForDelete = dmp.patch_make(text1, text2)
+        val patch = dmp.patch_make(text2, text3)
+        patch.addAll(dmp.patch_make(text3, text4))
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val res = dmp.patch_apply(deletePatch, text4)
+        assertEquals("""Imagine there's no countries
+            |It isn't hard to do
+            |Nothing to kill or die for
+            |And no religion too
+            |Imagine all the people living for today""".trimMargin(), res[0])
+    }
+
+    @Test
+    fun multiLinesReplaceWorld() {
+        val text1 = """All you need is love, all you need is love
+            |All you need is love, love, love is all you need""".trimMargin()
+        val text2 = """All you need is sleep, all you need is sleep
+            |All you need is sleep, sleep, sleep is all you need""".trimMargin()
+        val text3 = """All you need is sleep, all you need is sleep
+            |All you need is sleep, sleep, sleep is all you need
+            |There's nothing you can know that isn't known
+            |Nothing you can see that isn't shown""".trimMargin()
+        val text4 = """All you need is sleep, all you need is sleep
+            |All you need is sleep, sleep, sleep is all you need
+            |There's nothing you can know that isn't known
+            |Nothing you can see that isn't shown
+            |There's nowhere you can be that isn't where you're meant to be
+            |It's easy""".trimMargin()
+        val dmp = diff_match_patch()
+        val patchForDelete = dmp.patch_make(text1, text2)
+        val patch = dmp.patch_make(text2, text3)
+        patch.addAll(dmp.patch_make(text3, text4))
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val res = dmp.patch_apply(deletePatch, text4)
+        assertEquals("""All you need is love, all you need is love
+            |All you need is love, love, love is all you need
+            |There's nothing you can know that isn't known
+            |Nothing you can see that isn't shown
+            |There's nowhere you can be that isn't where you're meant to be
+            |It's easy""".trimMargin(), res[0])
     }
 }
