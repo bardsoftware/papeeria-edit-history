@@ -325,7 +325,7 @@ class CosmasGoogleCloudServiceTest {
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
         val (getVersionRecorder, getVersionRequest) = getStreamRecorderAndRequestForGettingVersion(version, fileId, projectId)
         this.service.getVersion(getVersionRequest, getVersionRecorder)
-        return getVersionRecorder.values[0].file.toStringUtf8()
+        return getVersionRecorder.values[0].file.content.toStringUtf8()
     }
 
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = "0", projectId: String = "0"):

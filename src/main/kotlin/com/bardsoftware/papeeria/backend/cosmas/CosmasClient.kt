@@ -46,7 +46,7 @@ class CosmasClient(host: String, port: Int) {
                 .setFileId("43")
                 .build()
         val response: GetVersionResponse = this.blockingStub.getVersion(request)
-        LOG.info("Get file: ${response.file.toStringUtf8()}")
+        LOG.info("Get file: ${response.file.content.toStringUtf8()}")
     }
 
     private fun addText() {
