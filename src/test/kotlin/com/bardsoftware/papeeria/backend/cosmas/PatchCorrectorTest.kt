@@ -26,9 +26,9 @@ class PatchCorrectorTest {
         val text2 = "Hello, world!"
         val dmp = diff_match_patch()
         val patch = dmp.patch_make(text1, text2)
-        val listOfPatch = LinkedList<diff_match_patch.Patch>()
-        listOfPatch.addAll(PatchCorrector.reversePatch(patch))
-        val newText = dmp.patch_apply(listOfPatch, text2)
+        val patches = LinkedList<diff_match_patch.Patch>()
+        patches.addAll(PatchCorrector.reversePatch(patch, text1))
+        val newText = dmp.patch_apply(patches, text2)
         assertEquals(text1, newText[0])
     }
 
@@ -38,9 +38,9 @@ class PatchCorrectorTest {
         val text1 = "Hello, world!"
         val dmp = diff_match_patch()
         val patch = dmp.patch_make(text1, text2)
-        val listOfPatch = LinkedList<diff_match_patch.Patch>()
-        listOfPatch.addAll(PatchCorrector.reversePatch(patch))
-        val newText = dmp.patch_apply(listOfPatch, text2)
+        val patches = LinkedList<diff_match_patch.Patch>()
+        patches.addAll(PatchCorrector.reversePatch(patch, text1))
+        val newText = dmp.patch_apply(patches, text2)
         assertEquals(text1, newText[0])
     }
 
@@ -52,7 +52,7 @@ class PatchCorrectorTest {
         val dmp = diff_match_patch()
         val patchForDelete  = dmp.patch_make(text1, text2)
         val patch = dmp.patch_make(text2, text3)
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text3)
         assertEquals("Hello, world", res[0])
     }
@@ -65,7 +65,7 @@ class PatchCorrectorTest {
         val dmp = diff_match_patch()
         val patchForDelete  = dmp.patch_make(text1, text2)
         val patch = dmp.patch_make(text2, text3)
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text3)
         assertEquals("Many ! many many words", res[0])
     }
@@ -82,7 +82,7 @@ class PatchCorrectorTest {
         val patch = dmp.patch_make(text2, text3)
         patch.addAll(dmp.patch_make(text3, text4))
         patch.addAll(dmp.patch_make(text4, text5))
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text5)
         assertEquals("Hello, beautiful life! Bye!", res[0])
     }
@@ -109,7 +109,7 @@ class PatchCorrectorTest {
         val patch = dmp.patch_make(text2, text3)
         patch.addAll(dmp.patch_make(text3, text4))
         patch.addAll(dmp.patch_make(text4, text5))
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text5)
         assertEquals("""Alice was very tired and upset: once or twice she had peeped into the book her sister was
              | reading, but it had no pictures or conversations in it, ‘and what is the use of a book,’ thought Alice ‘without
@@ -142,7 +142,7 @@ class PatchCorrectorTest {
         val patchForDelete = dmp.patch_make(text1, text2)
         val patch = dmp.patch_make(text2, text3)
         patch.addAll(dmp.patch_make(text3, text4))
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text4)
         assertEquals("""Hey Jude, don't make it bad
             |Take a sad song and make it better
@@ -178,7 +178,7 @@ class PatchCorrectorTest {
         val patchForDelete = dmp.patch_make(text1, text2)
         val patch = dmp.patch_make(text2, text3)
         patch.addAll(dmp.patch_make(text3, text4))
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text4)
         assertEquals("""Imagine there's no countries
             |It isn't hard to do
@@ -207,7 +207,7 @@ class PatchCorrectorTest {
         val patchForDelete = dmp.patch_make(text1, text2)
         val patch = dmp.patch_make(text2, text3)
         patch.addAll(dmp.patch_make(text3, text4))
-        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text2)
+        val deletePatch = PatchCorrector.deletePatch(patchForDelete, patch, text1)
         val res = dmp.patch_apply(deletePatch, text4)
         assertEquals("""All you need is love, all you need is love
             |All you need is love, love, love is all you need

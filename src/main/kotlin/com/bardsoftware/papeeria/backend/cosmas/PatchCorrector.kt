@@ -18,39 +18,23 @@ import java.util.LinkedList
 import name.fraser.neil.plaintext.diff_match_patch
 
 object PatchCorrector {
-    private fun getReverseOperation(operation: diff_match_patch.Operation): diff_match_patch.Operation {
-        return when (operation) {
-            diff_match_patch.Operation.DELETE -> diff_match_patch.Operation.INSERT
-            diff_match_patch.Operation.INSERT -> diff_match_patch.Operation.DELETE
-            else -> {
-                diff_match_patch.Operation.EQUAL
-            }
-        }
-    }
 
-    fun reversePatch(patchList: LinkedList<diff_match_patch.Patch>): LinkedList<diff_match_patch.Patch> {
-        val reversePatchList = LinkedList<diff_match_patch.Patch>()
-        for (patch in patchList) {
-            val newPatch = diff_match_patch.Patch()
-            newPatch.length1 = patch.length2
-            newPatch.length2 = patch.length1
-            newPatch.start1 = patch.start2
-            newPatch.start2 = patch.start1
-            for (diffs in patch.diffs) {
-                newPatch.diffs.add(diff_match_patch.Diff(getReverseOperation(diffs.operation), diffs.text))
-            }
-            reversePatchList.add(newPatch)
+    fun reversePatch(patchList: LinkedList<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
+        val dmp = diff_match_patch()
+        val newText = dmp.patch_apply(patchList, text)
+        if ((newText[1] as BooleanArray).any { !it }) {
+            throw DeletePatchException("Failure in patch apply")
         }
-        return reversePatchList
+        return dmp.patch_make(newText[0] as String, text)
     }
 
     fun deletePatch(deletedPatch: LinkedList<diff_match_patch.Patch>,
                     nextPatches: List<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
         val dmp = diff_match_patch()
-        var textVersion = text
+        var textVersion = dmp.patch_apply(deletedPatch, text)[0] as String
         val applyList = LinkedList<diff_match_patch.Patch>()
         var reversePatches = LinkedList<diff_match_patch.Patch>()
-        reversePatches.addAll(reversePatch(deletedPatch))
+        reversePatches.addAll(reversePatch(deletedPatch, text))
         for (patch in nextPatches) {
             applyList.clear()
             applyList.add(patch)
