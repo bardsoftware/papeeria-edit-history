@@ -28,15 +28,14 @@ object PatchCorrector {
         return dmp.patch_make(newText[0] as String, text)
     }
 
-    fun deletePatch(deletedPatch: LinkedList<diff_match_patch.Patch>,
+    fun deletePatch(deleteCandidate: LinkedList<diff_match_patch.Patch>,
                     nextPatches: List<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
         val dmp = diff_match_patch()
-        var textVersion = dmp.patch_apply(deletedPatch, text)[0] as String
-        val applyList = LinkedList<diff_match_patch.Patch>()
+        var textVersion = dmp.patch_apply(deleteCandidate, text)[0] as String
         var reversePatches = LinkedList<diff_match_patch.Patch>()
-        reversePatches.addAll(reversePatch(deletedPatch, text))
+        reversePatches.addAll(reversePatch(deleteCandidate, text))
         for (patch in nextPatches) {
-            applyList.clear()
+            val applyList = LinkedList<diff_match_patch.Patch>()
             applyList.add(patch)
             val nextVersion = dmp.patch_apply(applyList, textVersion)
             val nextVersionWithoutPatch = dmp.patch_apply(reversePatches, nextVersion[0] as String)
