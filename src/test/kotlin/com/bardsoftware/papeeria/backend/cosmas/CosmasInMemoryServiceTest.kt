@@ -226,6 +226,7 @@ class CosmasInMemoryServiceTest {
     }
 
     private fun getVersionsList(fileId: String = "0", projectId: String = "0"): List<Long> {
-        return getStreamRecorderForVersionList(fileId, projectId).values[0].versionsList.map { e -> e.generation }
+        val versionList = getStreamRecorderForVersionList(fileId, projectId).values[0].versionsList
+        return versionList.map { e -> e.generation }
     }
 }

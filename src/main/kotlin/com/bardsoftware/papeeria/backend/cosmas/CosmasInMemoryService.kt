@@ -15,11 +15,13 @@ limitations under the License.
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.Timestamp
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
 import java.io.Serializable
+import java.util.*
 
 private val LOG = LoggerFactory.getLogger("CosmasInMemoryService")
 
@@ -50,9 +52,10 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         val versionsInfo = mutableListOf<CosmasProto.FileVersionInfo>()
         for (generation in 0L until fileVersions.size) {
+            val time = Date()
             val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
                     .setGeneration(generation)
-                    .setTimestamp(generation)
+                    .setTimestamp(time.time)
             response.addVersions(versionInfo.build())
         }
         response.addAllVersions(versionsInfo)
