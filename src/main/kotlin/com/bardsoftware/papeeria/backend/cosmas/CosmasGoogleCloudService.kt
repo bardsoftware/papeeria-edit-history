@@ -16,8 +16,10 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
+import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
+import io.grpc.internal.testing.StreamRecorder
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
@@ -155,6 +157,51 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
+    fun deletePatchFromStorage(request: CosmasProto.DeletePatchRequest,
+                              responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
+        val blob: Blob? = try {
+            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.getVersionRequest.fileId).build().blobId,
+                    Storage.BlobGetOption.generationMatch(request.getVersionRequest.version))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val response = CosmasProto.DeletePatchResponse.newBuilder()
+        if (blob == null) {
+            val requestStatus = Status.NOT_FOUND.withDescription(
+                    "Can't delete patch. There is no such file version in storage")
+            responseObserver.onError(StatusException(requestStatus))
+            return
+        }
+        val fileVersion = CosmasProto.FileVersion.parseFrom(blob.getContent())
+        val text = fileVersion.content.toStringUtf8()
+        val patchList = fileVersion.patchesList
+        var indexCandidateDeletePatch = -1
+        for (patch in patchList) {
+            if (patch.timeStamp == request.timeStamp) {
+                indexCandidateDeletePatch = patchList.indexOf(patch)
+            }
+        }
+        if (indexCandidateDeletePatch == -1) {
+            val requestStatus = Status.NOT_FOUND.withDescription(
+                    "Can't delete patch. There is no such patch in storage")
+            responseObserver.onError(StatusException(requestStatus))
+            return
+        }
+        val newText = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+        val textNoPatch = PatchCorrector.applyPatch(
+                PatchCorrector.deletePatch(
+                        PatchCorrector.textToPatch(patchList[indexCandidateDeletePatch]),
+                        PatchCorrector.textToPatches(patchList.subList(indexCandidateDeletePatch + 1, patchList.size)),
+                        newText
+                ),
+                PatchCorrector.applyPatch(patchList, text)
+        )
+        response.content = ByteString.copyFromUtf8(textNoPatch)
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)
@@ -182,4 +229,5 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
         return CosmasProto.FileVersion.parseFrom(blob?.getContent()).patchesList
     }
+
 }

@@ -18,9 +18,35 @@ import java.util.LinkedList
 import name.fraser.neil.plaintext.diff_match_patch
 
 object PatchCorrector {
+    private val dmp = diff_match_patch()
+
+    fun textToPatches(patchList: MutableList<CosmasProto.Patch>) : LinkedList<diff_match_patch.Patch> {
+        val linkedList = LinkedList<diff_match_patch.Patch>()
+        for (patch in patchList)
+            linkedList.addAll(textToPatch(patch))
+        return linkedList
+    }
+
+    fun textToPatch(patch : CosmasProto.Patch) : LinkedList<diff_match_patch.Patch> {
+        val patchList = dmp.patch_fromText(patch.text)
+        val linkedList = LinkedList<diff_match_patch.Patch>()
+        linkedList.addAll(patchList)
+        println(patchList[0])
+        return linkedList
+    }
+
+    fun applyPatch(patchList: LinkedList<diff_match_patch.Patch>, text: String) : String {
+        return dmp.patch_apply(patchList, text)[0] as String
+    }
+
+    fun applyPatch(patchList: MutableList<CosmasProto.Patch>, text: String) : String {
+        val newText = dmp.patch_apply(textToPatches(patchList), text)
+        if ((newText[1] as BooleanArray).any { !it })
+            throw ApplyPatchException("Failure in patch apply")
+        return newText[0] as String
+    }
 
     fun reversePatch(patchList: LinkedList<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
-        val dmp = diff_match_patch()
         val newText = dmp.patch_apply(patchList, text)
         if ((newText[1] as BooleanArray).any { !it }) {
             throw DeletePatchException("Failure in patch apply")
@@ -30,7 +56,6 @@ object PatchCorrector {
 
     fun deletePatch(deleteCandidate: LinkedList<diff_match_patch.Patch>,
                     nextPatches: List<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
-        val dmp = diff_match_patch()
         var textVersion = dmp.patch_apply(deleteCandidate, text)[0] as String
         var reversePatches = LinkedList<diff_match_patch.Patch>()
         reversePatches.addAll(reversePatch(deleteCandidate, text))
@@ -49,4 +74,5 @@ object PatchCorrector {
     }
 
     public class DeletePatchException(message: String) : Throwable(message)
+    public class ApplyPatchException(message: String) : Throwable(message)
 }

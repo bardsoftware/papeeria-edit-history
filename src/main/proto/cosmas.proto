@@ -80,6 +80,15 @@ message FileVersion {
     bytes content = 2;
 }
 
+message DeletePatchRequest {
+    GetVersionRequest getVersionRequest = 1;
+    int64 timeStamp = 2;
+}
+
+message DeletePatchResponse {
+    bytes content = 1;
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -90,5 +99,7 @@ service Cosmas {
     rpc FileVersionList (FileVersionListRequest) returns (FileVersionListResponse) {
     }
     rpc CommitVersion (CommitVersionRequest) returns (CommitVersionResponse) {
+    }
+    rpc DeletePatch (DeletePatchRequest) returns (DeletePatchResponse) {
     }
 }

@@ -20,9 +20,11 @@ import com.google.cloud.storage.*
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
+import name.fraser.neil.plaintext.diff_match_patch
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.Result
 import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
 import org.mockito.Mockito
@@ -38,6 +40,7 @@ class CosmasGoogleCloudServiceTest {
 
     private val BUCKET_NAME = "papeeria-interns-cosmas"
     private var service = getServiceForTests()
+    private val dmp = diff_match_patch()
 
     @Before
     fun testInitialization() {
@@ -295,6 +298,109 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
+    fun deletePatchSimple() {
+        val text1 = "Hello"
+        val text2 = "Hello world"
+        val text3 = "Hello beautiful world"
+        val text4 = "Hello beautiful life"
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val listPatch = mutableListOf<Patch>()
+        listPatch.add(patch1)
+        listPatch.add(patch2)
+        listPatch.add(patch3)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlobWithPatch(text1, 1444, listPatch)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val resultText = deletePatch("1", "1", 1, 2)
+        assertEquals("Hello life", resultText)
+    }
+
+    @Test
+    fun deletePatchLongList() {
+        val text1 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal,
+              | thank you very much. They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense.""".trimMargin().replace("\n","")
+        val text2 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal,
+              | thank you very much. They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n","")
+        val text3 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n","")
+        val text4 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n","")
+        val text5 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n","")
+        val text6 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val text7 = """Mr Dursley, of number six, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val text8 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val text9 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val text10 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val text11 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
+              | They were the last people you'd expect to be involved in anything normal,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n","")
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val patch4 = newPatch("-", dmp.patch_toText(dmp.patch_make(text4, text5)), 4)
+        val patch5 = newPatch("-", dmp.patch_toText(dmp.patch_make(text5, text6)), 5)
+        val patch6 = newPatch("-", dmp.patch_toText(dmp.patch_make(text6, text7)), 6)
+        val patch7 = newPatch("-", dmp.patch_toText(dmp.patch_make(text7, text8)), 7)
+        val patch8 = newPatch("-", dmp.patch_toText(dmp.patch_make(text8, text9)), 8)
+        val patch9 = newPatch("-", dmp.patch_toText(dmp.patch_make(text9, text10)), 9)
+        val patch10 = newPatch("-", dmp.patch_toText(dmp.patch_make(text10, text11)),10)
+        val listPatch = mutableListOf<Patch>()
+        listPatch.add(patch1)
+        listPatch.add(patch2)
+        listPatch.add(patch3)
+        listPatch.add(patch4)
+        listPatch.add(patch5)
+        listPatch.add(patch6)
+        listPatch.add(patch7)
+        listPatch.add(patch8)
+        listPatch.add(patch9)
+        listPatch.add(patch10)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlobWithPatch(text1, 1444, listPatch)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val resultText = deletePatch("1", "1", 1, 4)
+        assertEquals("""Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
+              | They were the last people you'd expect to be involved in anything normal,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n",""), resultText)
+
+    }
+
+    @Test
     fun getPatchManyVersions() {
         val listPatch1 = mutableListOf<Patch>()
         val listPatch2 = mutableListOf<Patch>()
@@ -414,6 +520,23 @@ class CosmasGoogleCloudServiceTest {
                 .setPatch(newPatch)
                 .build()
         this.service.createPatch(newPatchRequest, createPatchRecorder)
+    }
+
+    private fun deletePatch(fileId: String, projectId: String, version: Long, timeStamp: Long): String {
+        val deletePatchRecorder: StreamRecorder<DeletePatchResponse> = StreamRecorder.create()
+        val getFileVersion = GetVersionRequest
+                .newBuilder()
+                .setVersion(version)
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .build()
+        val deletePatchRequest = DeletePatchRequest
+                .newBuilder()
+                .setGetVersionRequest(getFileVersion)
+                .setTimeStamp(timeStamp)
+                .build()
+        this.service.deletePatchFromStorage(deletePatchRequest, deletePatchRecorder)
+        return deletePatchRecorder.values[0].content.toStringUtf8()
     }
 
     private fun newPatch(userId: String, text: String, timeStamp: Long) : CosmasProto.Patch {
