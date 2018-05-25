@@ -1,5 +1,15 @@
 [![Build Status](https://travis-ci.org/bardsoftware/papeeria-edit-history.svg?branch=master)](https://travis-ci.org/bardsoftware/papeeria-edit-history)
 
+```
+$ gradle installDist
+$ papeeria-edit-history/build/install/Cosmas/bin/cosmas-server --bucket ""
+
+$ docker run -it --rm -v $(pwd):/workspace -v ivy-cache:/root/.ivy2 -v activator-cache:/opt/activator/repository -w /workspace --link 
+postgres:postgres --link memcached:memcache -p 9000:9000 --add-host="cosmas:$(../aws/usr/bin/get_internal_ip)" 
+bardsoftware/papeeria-builder activator
+$ run -Dconfig.file=conf/cosmas.conf
+```
+
 ## Summary
 
 This is an experimental component of Papeeria which is responsible for storing file edit history. Its main functions are as follows:
