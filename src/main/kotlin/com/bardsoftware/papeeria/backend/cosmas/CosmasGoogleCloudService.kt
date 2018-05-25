@@ -19,7 +19,6 @@ import com.google.cloud.storage.*
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
-import io.grpc.internal.testing.StreamRecorder
 import io.grpc.stub.StreamObserver
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
