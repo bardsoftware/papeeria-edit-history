@@ -297,7 +297,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun deletePatchSimple() {
+    fun getTextWithoutPatchSimple() {
         val text1 = "Hello"
         val text2 = "Hello world"
         val text3 = "Hello beautiful world"
@@ -310,10 +310,11 @@ class CosmasGoogleCloudServiceTest {
         listPatch.add(patch2)
         listPatch.add(patch3)
         val fakeStorage: Storage = mock(Storage::class.java)
-        val blob1 = getMockedBlobWithPatch(text1, 1444, listPatch)
+        val blob0 = getMockedBlob(text1)
+        val blob1 = getMockedBlobWithPatch(text4, 1444, listPatch)
         Mockito.`when`(fakeStorage.get(
                 any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1)
+                .thenReturn(blob1).thenReturn(blob0).thenReturn(null)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val resultText = deletePatch("1", "1", 1, 2)
         assertEquals("Hello life", resultText)
@@ -386,17 +387,54 @@ class CosmasGoogleCloudServiceTest {
         listPatch.add(patch9)
         listPatch.add(patch10)
         val fakeStorage: Storage = mock(Storage::class.java)
-        val blob1 = getMockedBlobWithPatch(text1, 1444, listPatch)
+        val blob0 = getMockedBlob(text1)
+        val blob1 = getMockedBlobWithPatch(text11, 1444, listPatch)
         Mockito.`when`(fakeStorage.get(
                 any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1)
+                .thenReturn(blob1).thenReturn(blob0).thenReturn(null)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val resultText = deletePatch("1", "1", 1, 4)
         assertEquals("""Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
               | They were the last people you'd expect to be involved in anything normal,
               | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Happy,
               | which made furniture.""".trimMargin().replace("\n",""), resultText)
+    }
 
+    @Test
+    fun getTextWithoutPatchFileVersions() {
+        val text1 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Privet Drive. Mr. Vernon Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n","")
+        val text2 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Vernon Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n","")
+        val text3 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n","")
+        val text4 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n","")
+        val text5 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Braun had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n","")
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val patch4 = newPatch("-", dmp.patch_toText(dmp.patch_make(text4, text5)), 4)
+        val blob0 = getMockedBlob(text1)
+        val blob1 = getMockedBlobWithPatch(text2, 1444, mutableListOf(patch1))
+        val blob2 = getMockedBlobWithPatch(text3, 3442, mutableListOf(patch2))
+        val blob3 = getMockedBlobWithPatch(text4, 4567, mutableListOf(patch3))
+        val blob4 = getMockedBlobWithPatch(text5, 1444, mutableListOf(patch4))
+        val fakeStorage: Storage = mock(Storage::class.java)
+        Mockito.`when`(fakeStorage.get(
+                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
+                .thenReturn(blob1).thenReturn(blob0).thenReturn(blob2).thenReturn(blob3).thenReturn(blob4).thenReturn(null)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val resultText = deletePatch("1", "1", 1, 1)
+        assertEquals( """Not for the first time, an argument had broken out over breakfast at number four,
+            | Privet Drive. Mr. Braun had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n",""), resultText)
     }
 
     @Test
@@ -522,19 +560,19 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun deletePatch(fileId: String, projectId: String, version: Long, timeStamp: Long): String {
-        val deletePatchRecorder: StreamRecorder<DeletePatchResponse> = StreamRecorder.create()
+        val deletePatchRecorder: StreamRecorder<getTextWithoutPatchResponse> = StreamRecorder.create()
         val getFileVersion = GetVersionRequest
                 .newBuilder()
                 .setVersion(version)
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()
-        val deletePatchRequest = DeletePatchRequest
+        val deletePatchRequest = getTextWithoutPatchRequest
                 .newBuilder()
                 .setGetVersionRequest(getFileVersion)
-                .setTimeStamp(timeStamp)
+                .setPatchTimeStamp(timeStamp)
                 .build()
-        this.service.deletePatchFromStorage(deletePatchRequest, deletePatchRecorder)
+        this.service.getTextWithoutPatch(deletePatchRequest, deletePatchRecorder)
         return deletePatchRecorder.values[0].content.toStringUtf8()
     }
 

@@ -80,12 +80,12 @@ message FileVersion {
     bytes content = 2;
 }
 
-message DeletePatchRequest {
+message getTextWithoutPatchRequest {
     GetVersionRequest getVersionRequest = 1;
-    int64 timeStamp = 2;
+    int64 patchTimeStamp = 2;
 }
 
-message DeletePatchResponse {
+message getTextWithoutPatchResponse {
     bytes content = 1;
 }
 
@@ -100,6 +100,6 @@ service Cosmas {
     }
     rpc CommitVersion (CommitVersionRequest) returns (CommitVersionResponse) {
     }
-    rpc DeletePatch (DeletePatchRequest) returns (DeletePatchResponse) {
+    rpc getTextWithoutPatch (getTextWithoutPatchRequest) returns (getTextWithoutPatchResponse) {
     }
 }

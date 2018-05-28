@@ -20,29 +20,34 @@ import name.fraser.neil.plaintext.diff_match_patch
 object PatchCorrector {
     private val dmp = diff_match_patch()
 
-    fun textToPatches(patchList: MutableList<CosmasProto.Patch>) : LinkedList<diff_match_patch.Patch> {
-        val linkedList = LinkedList<diff_match_patch.Patch>()
-        for (patch in patchList)
-            linkedList.addAll(textToPatch(patch))
-        return linkedList
+    private fun textToPatches(patchList: List<CosmasProto.Patch>) : LinkedList<diff_match_patch.Patch> {
+        val newPatchList = LinkedList<diff_match_patch.Patch>()
+        for (patch in patchList) {
+            newPatchList.addAll(textToPatch(patch))
+        }
+        return newPatchList
     }
 
-    fun textToPatch(patch : CosmasProto.Patch) : LinkedList<diff_match_patch.Patch> {
+    private fun textToPatch(patch : CosmasProto.Patch) : LinkedList<diff_match_patch.Patch> {
         val patchList = dmp.patch_fromText(patch.text)
-        val linkedList = LinkedList<diff_match_patch.Patch>()
-        linkedList.addAll(patchList)
-        println(patchList[0])
-        return linkedList
+        val newPatchList = LinkedList<diff_match_patch.Patch>()
+        newPatchList.addAll(patchList)
+        return newPatchList
     }
 
     fun applyPatch(patchList: LinkedList<diff_match_patch.Patch>, text: String) : String {
-        return dmp.patch_apply(patchList, text)[0] as String
+        val newText =  dmp.patch_apply(patchList, text)
+        if ((newText[1] as BooleanArray).any { !it }) {
+            throw ApplyPatchException("Failure in patch apply")
+        }
+        return newText[0] as String
     }
 
-    fun applyPatch(patchList: MutableList<CosmasProto.Patch>, text: String) : String {
+    fun applyPatch(patchList: List<CosmasProto.Patch>, text: String) : String {
         val newText = dmp.patch_apply(textToPatches(patchList), text)
-        if ((newText[1] as BooleanArray).any { !it })
+        if ((newText[1] as BooleanArray).any { !it }) {
             throw ApplyPatchException("Failure in patch apply")
+        }
         return newText[0] as String
     }
 
@@ -52,6 +57,11 @@ object PatchCorrector {
             throw DeletePatchException("Failure in patch apply")
         }
         return dmp.patch_make(newText[0] as String, text)
+    }
+
+    fun deletePatch(deleteCandidate: CosmasProto.Patch,
+                    nextPatches: List<CosmasProto.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
+        return deletePatch(textToPatch(deleteCandidate), textToPatches(nextPatches), text)
     }
 
     fun deletePatch(deleteCandidate: LinkedList<diff_match_patch.Patch>,

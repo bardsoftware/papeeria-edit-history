@@ -156,29 +156,44 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
-    fun deletePatchFromStorage(request: CosmasProto.DeletePatchRequest,
-                              responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
-        val blob: Blob? = try {
+    override fun getTextWithoutPatch(request: CosmasProto.getTextWithoutPatchRequest,
+                              responseObserver: StreamObserver<CosmasProto.getTextWithoutPatchResponse>) {
+        var askedVersion = request.getVersionRequest.version
+        val blobRequestVersion: Blob? = try {
             this.storage.get(BlobInfo.newBuilder(this.bucketName, request.getVersionRequest.fileId).build().blobId,
-                    Storage.BlobGetOption.generationMatch(request.getVersionRequest.version))
+                    Storage.BlobGetOption.generationMatch(askedVersion))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
         }
-        val response = CosmasProto.DeletePatchResponse.newBuilder()
-        if (blob == null) {
+        if (blobRequestVersion == null) {
             val requestStatus = Status.NOT_FOUND.withDescription(
                     "Can't delete patch. There is no such file version in storage")
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        val fileVersion = CosmasProto.FileVersion.parseFrom(blob.getContent())
-        val text = fileVersion.content.toStringUtf8()
-        val patchList = fileVersion.patchesList
+        val blobPreviousVersion: Blob?  = try {
+            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.getVersionRequest.fileId).build().blobId,
+                    Storage.BlobGetOption.generationMatch(askedVersion - 1))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        if (blobPreviousVersion == null && askedVersion > 0) {
+            val requestStatus = Status.NOT_FOUND.withDescription(
+                    "Can't delete patch. There is no such file version in storage")
+            responseObserver.onError(StatusException(requestStatus))
+            return
+        }
+        val fileVersion1 = CosmasProto.FileVersion.parseFrom(blobRequestVersion.getContent())
+        val fileVersion2 = if (blobPreviousVersion != null) { CosmasProto.FileVersion.parseFrom(blobPreviousVersion.getContent()) } else { null }
+        val text = if (fileVersion2 != null) { fileVersion2.content.toStringUtf8() } else {""}
+        val patchList = mutableListOf<CosmasProto.Patch>()
+        patchList.addAll(fileVersion1.patchesList)
         var indexCandidateDeletePatch = -1
-        for (patch in patchList) {
-            if (patch.timeStamp == request.timeStamp) {
-                indexCandidateDeletePatch = patchList.indexOf(patch)
+        for ((patchIndex, patch) in patchList.withIndex()) {
+            if (patch.timeStamp == request.patchTimeStamp) {
+                indexCandidateDeletePatch = patchIndex
             }
         }
         if (indexCandidateDeletePatch == -1) {
@@ -187,15 +202,28 @@ class CosmasGoogleCloudService(private val bucketName: String,
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        val newText = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+        while (true) {
+            askedVersion++
+            val blob: Blob = try {
+                this.storage.get(BlobInfo.newBuilder(this.bucketName, request.getVersionRequest.fileId).build().blobId,
+                        Storage.BlobGetOption.generationMatch(askedVersion))
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
+            } ?: break
+            val fileVersion = CosmasProto.FileVersion.parseFrom(blob.getContent())
+            patchList.addAll(fileVersion.patchesList)
+        }
+        val textBeforeCandidateDelete = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+        val finishText = PatchCorrector.applyPatch(patchList, text)
         val textNoPatch = PatchCorrector.applyPatch(
                 PatchCorrector.deletePatch(
-                        PatchCorrector.textToPatch(patchList[indexCandidateDeletePatch]),
-                        PatchCorrector.textToPatches(patchList.subList(indexCandidateDeletePatch + 1, patchList.size)),
-                        newText
-                ),
-                PatchCorrector.applyPatch(patchList, text)
+                        patchList[indexCandidateDeletePatch],
+                        patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
+                textBeforeCandidateDelete),
+                finishText
         )
+        val response = CosmasProto.getTextWithoutPatchResponse.newBuilder()
         response.content = ByteString.copyFromUtf8(textNoPatch)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
