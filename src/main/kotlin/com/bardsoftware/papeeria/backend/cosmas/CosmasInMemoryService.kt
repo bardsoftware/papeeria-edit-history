@@ -123,7 +123,7 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
         LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patch.userId}")
         synchronized(this.patches) {
             val patchesList = patches[request.fileId] ?: mutableListOf()
-            patchesList.add(Patch(request.patch.userId, request.patch.text, request.patch.timeStamp))
+            patchesList.add(Patch(request.patch.userId, request.patch.text, request.patch.timestamp))
             patches[request.fileId] = patchesList
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse

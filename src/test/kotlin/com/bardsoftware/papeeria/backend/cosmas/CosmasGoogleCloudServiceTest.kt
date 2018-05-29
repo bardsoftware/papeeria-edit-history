@@ -211,7 +211,7 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(1, list!!.size)
         assertEquals("abc", list[0].text)
         assertEquals("-", list[0].userId)
-        assertEquals(1L, list[0].timeStamp)
+        assertEquals(1L, list[0].timestamp)
         commit("1")
         val listNull = this.service.getPatchList("1", "1")
         assertNull(listNull)
@@ -222,7 +222,7 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(1, list1!!.size)
         assertEquals("abcNew", list1[0].text)
         assertEquals("-New", list1[0].userId)
-        assertEquals(10L, list1[0].timeStamp)
+        assertEquals(10L, list1[0].timestamp)
     }
 
     @Test
@@ -309,14 +309,17 @@ class CosmasGoogleCloudServiceTest {
         listPatch.add(patch1)
         listPatch.add(patch2)
         listPatch.add(patch3)
-        val fakeStorage: Storage = mock(Storage::class.java)
-        val blob0 = getMockedBlob(text1)
+        val blob0 = getMockedBlobWithPatch(text1, 900, mutableListOf())
         val blob1 = getMockedBlobWithPatch(text4, 1444, listPatch)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob0).thenReturn(null)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
-        val resultText = deletePatch("1", "1", 1, 2)
+        val resultText = deletePatch("1", "1", 1444, 2)
         assertEquals("Hello life", resultText)
     }
 
@@ -386,14 +389,17 @@ class CosmasGoogleCloudServiceTest {
         listPatch.add(patch8)
         listPatch.add(patch9)
         listPatch.add(patch10)
-        val fakeStorage: Storage = mock(Storage::class.java)
-        val blob0 = getMockedBlob(text1)
+        val blob0 = getMockedBlobWithPatch(text1, 900, mutableListOf())
         val blob1 = getMockedBlobWithPatch(text11, 1444, listPatch)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob0).thenReturn(null)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
-        val resultText = deletePatch("1", "1", 1, 4)
+        val resultText = deletePatch("1", "1", 1444, 4)
         assertEquals("""Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
               | They were the last people you'd expect to be involved in anything normal,
               | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Happy,
@@ -421,17 +427,20 @@ class CosmasGoogleCloudServiceTest {
         val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
         val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
         val patch4 = newPatch("-", dmp.patch_toText(dmp.patch_make(text4, text5)), 4)
-        val blob0 = getMockedBlob(text1)
-        val blob1 = getMockedBlobWithPatch(text2, 1444, mutableListOf(patch1))
-        val blob2 = getMockedBlobWithPatch(text3, 3442, mutableListOf(patch2))
-        val blob3 = getMockedBlobWithPatch(text4, 4567, mutableListOf(patch3))
-        val blob4 = getMockedBlobWithPatch(text5, 1444, mutableListOf(patch4))
+        val blob0 = getMockedBlobWithPatch(text1, 200, mutableListOf())
+        val blob1 = getMockedBlobWithPatch(text2, 300, mutableListOf(patch1))
+        val blob2 = getMockedBlobWithPatch(text3, 400, mutableListOf(patch2))
+        val blob3 = getMockedBlobWithPatch(text4, 500, mutableListOf(patch3))
+        val blob4 = getMockedBlobWithPatch(text5, 600, mutableListOf(patch4))
         val fakeStorage: Storage = mock(Storage::class.java)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob0).thenReturn(blob2).thenReturn(blob3).thenReturn(blob4).thenReturn(null)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0, blob2, blob3, blob4))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
-        val resultText = deletePatch("1", "1", 1, 1)
+        val resultText = deletePatch("1", "1", 300, 1)
         assertEquals( """Not for the first time, an argument had broken out over breakfast at number four,
             | Privet Drive. Mr. Braun had been woken in the early hours of the morning by a loud,
             | hooting noise from his nephew's room.""".trimMargin().replace("\n",""), resultText)
@@ -525,11 +534,11 @@ class CosmasGoogleCloudServiceTest {
         return blob
     }
 
-    private fun getMockedBlobWithPatch(fileContent: String, generation: Long = 0, patchList : MutableList<CosmasProto.Patch>): Blob {
+    private fun getMockedBlobWithPatch(fileContent: String, createTime: Long = 0, patchList : MutableList<CosmasProto.Patch>): Blob {
         val blob = mock(Blob::class.java)
         Mockito.`when`(blob.getContent()).thenReturn(FileVersion.newBuilder().addAllPatches(patchList)
                 .setContent(ByteString.copyFrom(fileContent.toByteArray())).build().toByteArray())
-        Mockito.`when`(blob.generation).thenReturn(generation)
+        Mockito.`when`(blob.createTime).thenReturn(createTime)
         return blob
     }
 
@@ -559,24 +568,20 @@ class CosmasGoogleCloudServiceTest {
         this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
 
-    private fun deletePatch(fileId: String, projectId: String, version: Long, timeStamp: Long): String {
-        val deletePatchRecorder: StreamRecorder<getTextWithoutPatchResponse> = StreamRecorder.create()
-        val getFileVersion = GetVersionRequest
+    private fun deletePatch(fileId: String, projectId: String, versionTimestamp: Long, patchTimestamp: Long): String {
+        val deletePatchRecorder: StreamRecorder<DeletePatchResponse> = StreamRecorder.create()
+        val deletePatchRequest = DeletePatchRequest
                 .newBuilder()
-                .setVersion(version)
+                .setVersionTimestamp(versionTimestamp)
                 .setFileId(fileId)
                 .setProjectId(projectId)
+                .setPatchTimestamp(patchTimestamp)
                 .build()
-        val deletePatchRequest = getTextWithoutPatchRequest
-                .newBuilder()
-                .setGetVersionRequest(getFileVersion)
-                .setPatchTimeStamp(timeStamp)
-                .build()
-        this.service.getTextWithoutPatch(deletePatchRequest, deletePatchRecorder)
+        this.service.deletePatch(deletePatchRequest, deletePatchRecorder)
         return deletePatchRecorder.values[0].content.toStringUtf8()
     }
 
     private fun newPatch(userId: String, text: String, timeStamp: Long) : CosmasProto.Patch {
-        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimeStamp(timeStamp).build()
+        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimestamp(timeStamp).build()
     }
 }

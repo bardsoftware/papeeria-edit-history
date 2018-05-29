@@ -54,7 +54,7 @@ object PatchCorrector {
     fun reversePatch(patchList: LinkedList<diff_match_patch.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
         val newText = dmp.patch_apply(patchList, text)
         if ((newText[1] as BooleanArray).any { !it }) {
-            throw DeletePatchException("Failure in patch apply")
+            throw ApplyPatchException("Failure in patch apply")
         }
         return dmp.patch_make(newText[0] as String, text)
     }
@@ -75,7 +75,7 @@ object PatchCorrector {
             val nextVersion = dmp.patch_apply(applyList, textVersion)
             val nextVersionWithoutPatch = dmp.patch_apply(reversePatches, nextVersion[0] as String)
             if ((nextVersion[1] as BooleanArray).any { !it } || (nextVersionWithoutPatch[1] as BooleanArray).any { !it }) {
-                throw DeletePatchException("Failure in patch apply")
+                throw ApplyPatchException("Failure in patch apply")
             }
             reversePatches = dmp.patch_make(nextVersion[0] as String, nextVersionWithoutPatch[0] as String)
             textVersion = nextVersion[0] as String
@@ -83,6 +83,5 @@ object PatchCorrector {
         return reversePatches
     }
 
-    public class DeletePatchException(message: String) : Throwable(message)
     public class ApplyPatchException(message: String) : Throwable(message)
 }

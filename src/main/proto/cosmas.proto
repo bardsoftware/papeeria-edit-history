@@ -41,7 +41,7 @@ message CreateVersionResponse {
 message Patch {
     string userId = 1;
     string text = 2;
-    int64 timeStamp = 3;
+    int64 timestamp = 3;
 }
 
 message CreatePatchRequest {
@@ -80,12 +80,14 @@ message FileVersion {
     bytes content = 2;
 }
 
-message getTextWithoutPatchRequest {
-    GetVersionRequest getVersionRequest = 1;
-    int64 patchTimeStamp = 2;
+message DeletePatchRequest {
+    string projectId = 1;
+    string fileId = 2;
+    int64 versionTimestamp = 3;
+    int64 patchTimestamp = 4;
 }
 
-message getTextWithoutPatchResponse {
+message DeletePatchResponse {
     bytes content = 1;
 }
 
@@ -100,6 +102,6 @@ service Cosmas {
     }
     rpc CommitVersion (CommitVersionRequest) returns (CommitVersionResponse) {
     }
-    rpc getTextWithoutPatch (getTextWithoutPatchRequest) returns (getTextWithoutPatchResponse) {
+    rpc DeletePatch (DeletePatchRequest) returns (DeletePatchResponse) {
     }
 }
