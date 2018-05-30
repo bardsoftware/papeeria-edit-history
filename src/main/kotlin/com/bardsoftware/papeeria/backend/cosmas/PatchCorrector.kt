@@ -23,15 +23,8 @@ object PatchCorrector {
     private fun textToPatches(patchList: List<CosmasProto.Patch>) : LinkedList<diff_match_patch.Patch> {
         val newPatchList = LinkedList<diff_match_patch.Patch>()
         for (patch in patchList) {
-            newPatchList.addAll(textToPatch(patch))
+            newPatchList.addAll(LinkedList(dmp.patch_fromText(patch.text)))
         }
-        return newPatchList
-    }
-
-    private fun textToPatch(patch : CosmasProto.Patch) : LinkedList<diff_match_patch.Patch> {
-        val patchList = dmp.patch_fromText(patch.text)
-        val newPatchList = LinkedList<diff_match_patch.Patch>()
-        newPatchList.addAll(patchList)
         return newPatchList
     }
 
@@ -61,7 +54,7 @@ object PatchCorrector {
 
     fun deletePatch(deleteCandidate: CosmasProto.Patch,
                     nextPatches: List<CosmasProto.Patch>, text: String): LinkedList<diff_match_patch.Patch> {
-        return deletePatch(textToPatch(deleteCandidate), textToPatches(nextPatches), text)
+        return deletePatch(LinkedList(dmp.patch_fromText(deleteCandidate.text)), textToPatches(nextPatches), text)
     }
 
     fun deletePatch(deleteCandidate: LinkedList<diff_match_patch.Patch>,
