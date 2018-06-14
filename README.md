@@ -1,8 +1,12 @@
 [![Build Status](https://travis-ci.org/bardsoftware/papeeria-edit-history.svg?branch=master)](https://travis-ci.org/bardsoftware/papeeria-edit-history)
 
+## Running Cosmas server
+You need a JSON credentials file to be able to access Google Cloud Storage and you need to know GCS bucket name.
+
 ```
 $ gradle installDist
-$ papeeria-edit-history/build/install/Cosmas/bin/cosmas-server --bucket ""
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/credentials/file.json
+$ papeeria-edit-history/build/install/Cosmas/bin/cosmas-server --bucket "papeeria-interns-cosmas"
 
 $ docker run -it --rm -v $(pwd):/workspace -v ivy-cache:/root/.ivy2 -v activator-cache:/opt/activator/repository -w /workspace --link 
 postgres:postgres --link memcached:memcache -p 9000:9000 --add-host="cosmas:$(../aws/usr/bin/get_internal_ip)" 
