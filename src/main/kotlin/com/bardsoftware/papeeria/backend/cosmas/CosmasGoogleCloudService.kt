@@ -108,8 +108,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         LOG.info("Get request for version ${request.version} file # ${request.fileId}")
         val blob: Blob? = try {
-            this.storage.get(BlobInfo.newBuilder(this.bucketName, request.fileId).build().blobId,
-                    Storage.BlobGetOption.generationMatch(request.version))
+            this.storage.get(BlobId.of(this.bucketName, request.fileId, request.version))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
