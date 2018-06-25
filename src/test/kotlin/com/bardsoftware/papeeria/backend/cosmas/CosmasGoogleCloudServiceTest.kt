@@ -303,9 +303,7 @@ class CosmasGoogleCloudServiceTest {
         val fakeStorage: Storage = mock(Storage::class.java)
         val blob1 = getMockedBlobWithPatch("ver1", 1444, listPatch1)
         val blob2 = getMockedBlobWithPatch("ver2", 822, listPatch2)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val list1 = this.service.getPatchListFromStorage("1", 0)
         val list2 = this.service.getPatchListFromStorage("1", 1)
