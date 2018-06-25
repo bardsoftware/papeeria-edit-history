@@ -83,7 +83,7 @@ message FileVersion {
 message DeletePatchRequest {
     string projectId = 1;
     string fileId = 2;
-    int64 versionTimestamp = 3;
+    int64 generation = 3;
     int64 patchTimestamp = 4;
 }
 

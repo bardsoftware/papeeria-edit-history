@@ -182,8 +182,11 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun deletePatch(request: CosmasProto.DeletePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
+        // Timestamp of file version witch contains patch
+        val versionTimestamp = this.storage.get(BlobId.of(this.bucketName, request.fileId, request.generation)).createTime
+        // Text of version from which patch was applied (version before version witch contains patch)
         val (patchList, text) = try {
-            getPatchListAndPreviousText(request.fileId, request.versionTimestamp)
+            getPatchListAndPreviousText(request.fileId, versionTimestamp)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -192,6 +195,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         for ((patchIndex, patch) in patchList.iterator().withIndex()) {
             if (patch.timestamp == request.patchTimestamp) {
                 indexCandidateDeletePatch = patchIndex
+                break
             }
         }
         if (indexCandidateDeletePatch == -1) {
@@ -200,24 +204,25 @@ class CosmasGoogleCloudService(private val bucketName: String,
             responseObserver.onError(StatusException(requestStatus))
             return
         }
-        val textNoPatch : String
+        val textWithoutPatch: String
         try {
-        val textBeforeCandidateDelete = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
-        val finishText = PatchCorrector.applyPatch(patchList, text)
-        textNoPatch = PatchCorrector.applyPatch(
-                PatchCorrector.deletePatch(
-                        patchList[indexCandidateDeletePatch],
-                        patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
-                        textBeforeCandidateDelete),
-                finishText
-            )
-        } catch (e : PatchCorrector.ApplyPatchException) {
-            val status = Status.ABORTED.withDescription(e.message)
+            val textBeforeCandidateDelete = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+            val finishText = CosmasProto.FileVersion.parseFrom(
+                    this.storage.get(BlobId.of(this.bucketName, request.fileId)).getContent()).content.toStringUtf8()
+            textWithoutPatch = PatchCorrector.applyPatch(
+                    PatchCorrector.deletePatch(
+                            patchList[indexCandidateDeletePatch],
+                            patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
+                            textBeforeCandidateDelete),
+                    finishText)
+        } catch (e: PatchCorrector.ApplyPatchException) {
+            val status = Status.INTERNAL.withDescription(e.message)
+            LOG.error("Can't apply patch: ${e.message}")
             responseObserver.onError(StatusException(status))
             return
         }
         val response = CosmasProto.DeletePatchResponse.newBuilder()
-        response.content = ByteString.copyFromUtf8(textNoPatch)
+        response.content = ByteString.copyFromUtf8(textWithoutPatch)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
