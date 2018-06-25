@@ -119,9 +119,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(fakeStorage.create(
                 any(BlobInfo::class.java), any(ByteArray::class.java)))
                 .thenReturn(blob1).thenReturn(blob2)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         createVersion("ver1", "43")
         commit()
@@ -164,9 +162,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(fakeStorage.create(
                 any(BlobInfo::class.java), eq("ver4".toByteArray())))
                 .thenReturn(blob2)
-        Mockito.`when`(fakeStorage.get(
-                any(BlobId::class.java), any(Storage.BlobGetOption::class.java)))
-                .thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         createVersion("ver1")
         createVersion("ver2")
