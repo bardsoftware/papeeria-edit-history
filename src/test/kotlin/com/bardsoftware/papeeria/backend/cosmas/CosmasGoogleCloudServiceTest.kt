@@ -20,6 +20,7 @@ import com.google.cloud.storage.*
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
 import io.grpc.internal.testing.StreamRecorder
+import name.fraser.neil.plaintext.diff_match_patch
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -38,6 +39,7 @@ class CosmasGoogleCloudServiceTest {
 
     private val BUCKET_NAME = "papeeria-interns-cosmas"
     private var service = getServiceForTests()
+    private val dmp = diff_match_patch()
 
     @Before
     fun testInitialization() {
@@ -209,7 +211,7 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(1, list!!.size)
         assertEquals("abc", list[0].text)
         assertEquals("-", list[0].userId)
-        assertEquals(1L, list[0].timeStamp)
+        assertEquals(1L, list[0].timestamp)
         commit("1")
         val listNull = this.service.getPatchList("1", "1")
         assertNull(listNull)
@@ -220,7 +222,7 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(1, list1!!.size)
         assertEquals("abcNew", list1[0].text)
         assertEquals("-New", list1[0].userId)
-        assertEquals(10L, list1[0].timeStamp)
+        assertEquals(10L, list1[0].timestamp)
     }
 
     @Test
@@ -239,10 +241,10 @@ class CosmasGoogleCloudServiceTest {
     fun addPatchTest() {
         val listPatch1 = mutableListOf<Patch>()
         val listPatch2 = mutableListOf<Patch>()
-        val patch1 = newPatch("-1","patch1",1)
-        val patch2 = newPatch("-2","patch2",2)
-        val patch3 = newPatch("-3","patch3",3)
-        val patch4 = newPatch("-4","patch4",4)
+        val patch1 = newPatch("-1", "patch1", 1)
+        val patch2 = newPatch("-2", "patch2", 2)
+        val patch3 = newPatch("-3", "patch3", 3)
+        val patch4 = newPatch("-4", "patch4", 4)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         listPatch2.add(patch3)
@@ -278,8 +280,8 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun getPatchSimple() {
         val listPatch1 = mutableListOf<Patch>()
-        val patch1 = newPatch("-1","patch1",1)
-        val patch2 = newPatch("-2","patch2",2)
+        val patch1 = newPatch("-1", "patch1", 1)
+        val patch2 = newPatch("-2", "patch2", 2)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         val fakeStorage: Storage = mock(Storage::class.java)
@@ -295,13 +297,172 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
+    fun getTextWithoutPatchSimple() {
+        val text1 = "Hello"
+        val text2 = "Hello world"
+        val text3 = "Hello beautiful world"
+        val text4 = "Hello beautiful life"
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val listPatch = mutableListOf(patch1, patch2, patch3)
+        val blob0 = getMockedBlobWithPatch(text1, 900, mutableListOf())
+        val blob1 = getMockedBlobWithPatch(text4, 1444, listPatch)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
+        val generation = 43L
+        val fileId = "1"
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId, generation))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId))).thenReturn(blob1)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val resultText = deletePatch(fileId, "1", generation, 2)
+        assertEquals("Hello life", resultText)
+    }
+
+    @Test
+    fun deletePatchLongList() {
+        val text1 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal,
+              | thank you very much. They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense.""".trimMargin().replace("\n", "")
+        val text2 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal,
+              | thank you very much. They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n", "")
+        val text3 = """Mr and Mrs Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n", "")
+        val text4 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n", "")
+        val text5 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made drills.""".trimMargin().replace("\n", "")
+        val text6 = """Mr Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val text7 = """Mr Dursley, of number six, Privet Drive, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val text8 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Grunnings,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val text9 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange or mysterious,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val text10 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly normal.
+              | They were the last people you'd expect to be involved in anything strange,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val text11 = """Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
+              | They were the last people you'd expect to be involved in anything normal,
+              | because they just didn't hold with such nonsense. Mr Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n", "")
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val patch4 = newPatch("-", dmp.patch_toText(dmp.patch_make(text4, text5)), 4)
+        val patch5 = newPatch("-", dmp.patch_toText(dmp.patch_make(text5, text6)), 5)
+        val patch6 = newPatch("-", dmp.patch_toText(dmp.patch_make(text6, text7)), 6)
+        val patch7 = newPatch("-", dmp.patch_toText(dmp.patch_make(text7, text8)), 7)
+        val patch8 = newPatch("-", dmp.patch_toText(dmp.patch_make(text8, text9)), 8)
+        val patch9 = newPatch("-", dmp.patch_toText(dmp.patch_make(text9, text10)), 9)
+        val patch10 = newPatch("-", dmp.patch_toText(dmp.patch_make(text10, text11)), 10)
+        val listPatch = mutableListOf<Patch>()
+        listPatch.add(patch1)
+        listPatch.add(patch2)
+        listPatch.add(patch3)
+        listPatch.add(patch4)
+        listPatch.add(patch5)
+        listPatch.add(patch6)
+        listPatch.add(patch7)
+        listPatch.add(patch8)
+        listPatch.add(patch9)
+        listPatch.add(patch10)
+        val blob0 = getMockedBlobWithPatch(text1, 900, mutableListOf())
+        val blob1 = getMockedBlobWithPatch(text11, 1444, listPatch)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
+        val generation = 43L
+        val fileId = "1"
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId, generation))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId))).thenReturn(blob1)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val resultText = deletePatch(fileId, "1", generation, 4)
+        assertEquals("""Mr Dursley, of number six, Wall Street, were proud to say that they were perfectly strange.
+              | They were the last people you'd expect to be involved in anything normal,
+              | because they just didn't hold with such nonsense. Mr. Dursley was the director of a firm called Happy,
+              | which made furniture.""".trimMargin().replace("\n", ""), resultText)
+    }
+
+    @Test
+    fun getTextWithoutPatchFileVersions() {
+        val text1 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Privet Drive. Mr. Vernon Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n", "")
+        val text2 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Vernon Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n", "")
+        val text3 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew Harry's room.""".trimMargin().replace("\n", "")
+        val text4 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Dursley had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n", "")
+        val text5 = """Not for the first time, an argument had broken out over breakfast at number four,
+            | Wall Street. Mr. Braun had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n", "")
+        val patch1 = newPatch("-", dmp.patch_toText(dmp.patch_make(text1, text2)), 1)
+        val patch2 = newPatch("-", dmp.patch_toText(dmp.patch_make(text2, text3)), 2)
+        val patch3 = newPatch("-", dmp.patch_toText(dmp.patch_make(text3, text4)), 3)
+        val patch4 = newPatch("-", dmp.patch_toText(dmp.patch_make(text4, text5)), 4)
+        val blob0 = getMockedBlobWithPatch(text1, 200, mutableListOf())
+        val blob1 = getMockedBlobWithPatch(text2, 300, mutableListOf(patch1))
+        val blob2 = getMockedBlobWithPatch(text3, 400, mutableListOf(patch2))
+        val blob3 = getMockedBlobWithPatch(text4, 500, mutableListOf(patch3))
+        val blob4 = getMockedBlobWithPatch(text5, 600, mutableListOf(patch4))
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val fakePage: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        Mockito.`when`(fakePage.iterateAll())
+                .thenReturn(listOf(blob1, blob0, blob2, blob3, blob4))
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val generation = 43L
+        val fileId = "1"
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId, generation))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(BlobId.of(this.BUCKET_NAME, fileId))).thenReturn(blob4)
+        val resultText = deletePatch(fileId, "1", generation, 1)
+        assertEquals("""Not for the first time, an argument had broken out over breakfast at number four,
+            | Privet Drive. Mr. Braun had been woken in the early hours of the morning by a loud,
+            | hooting noise from his nephew's room.""".trimMargin().replace("\n", ""), resultText)
+    }
+
+    @Test
     fun getPatchManyVersions() {
         val listPatch1 = mutableListOf<Patch>()
         val listPatch2 = mutableListOf<Patch>()
-        val patch1 = newPatch("-1","patch1",1)
-        val patch2 = newPatch("-2","patch2",2)
-        val patch3 = newPatch("-3","patch3",3)
-        val patch4 = newPatch("-4","patch4",4)
+        val patch1 = newPatch("-1", "patch1", 1)
+        val patch2 = newPatch("-2", "patch2", 2)
+        val patch3 = newPatch("-3", "patch3", 3)
+        val patch4 = newPatch("-4", "patch4", 4)
         listPatch1.add(patch1)
         listPatch1.add(patch2)
         listPatch2.add(patch3)
@@ -382,11 +543,11 @@ class CosmasGoogleCloudServiceTest {
         return blob
     }
 
-    private fun getMockedBlobWithPatch(fileContent: String, generation: Long = 0, patchList : MutableList<CosmasProto.Patch>): Blob {
+    private fun getMockedBlobWithPatch(fileContent: String, createTime: Long = 0, patchList: MutableList<CosmasProto.Patch>): Blob {
         val blob = mock(Blob::class.java)
         Mockito.`when`(blob.getContent()).thenReturn(FileVersion.newBuilder().addAllPatches(patchList)
                 .setContent(ByteString.copyFrom(fileContent.toByteArray())).build().toByteArray())
-        Mockito.`when`(blob.generation).thenReturn(generation)
+        Mockito.`when`(blob.createTime).thenReturn(createTime)
         return blob
     }
 
@@ -416,7 +577,20 @@ class CosmasGoogleCloudServiceTest {
         this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
 
-    private fun newPatch(userId: String, text: String, timeStamp: Long) : CosmasProto.Patch {
-        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimeStamp(timeStamp).build()
+    private fun deletePatch(fileId: String, projectId: String, generation: Long, patchTimestamp: Long): String {
+        val deletePatchRecorder: StreamRecorder<DeletePatchResponse> = StreamRecorder.create()
+        val deletePatchRequest = DeletePatchRequest
+                .newBuilder()
+                .setGeneration(generation)
+                .setFileId(fileId)
+                .setProjectId(projectId)
+                .setPatchTimestamp(patchTimestamp)
+                .build()
+        this.service.deletePatch(deletePatchRequest, deletePatchRecorder)
+        return deletePatchRecorder.values[0].content.toStringUtf8()
+    }
+
+    private fun newPatch(userId: String, text: String, timeStamp: Long): CosmasProto.Patch {
+        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimestamp(timeStamp).build()
     }
 }

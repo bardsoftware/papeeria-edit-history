@@ -16,6 +16,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
+import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
@@ -155,6 +156,76 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
+    private fun getPatchListAndPreviousText(fileId: String, timestamp: Long): Pair<List<CosmasProto.Patch>, String> {
+        val blobs: Page<Blob> = try {
+            this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
+                    Storage.BlobListOption.prefix(fileId))
+        } catch (e: StorageException) {
+            throw e
+        }
+        val patchList = mutableListOf<CosmasProto.Patch>()
+        var closestTimestamp = -1L
+        var previousText = ""
+        blobs.iterateAll().forEach {
+            if (it.createTime >= timestamp) {
+                patchList.addAll(CosmasProto.FileVersion.parseFrom(it.getContent()).patchesList)
+            } else if (it.createTime > closestTimestamp) {
+                closestTimestamp = it.createTime
+                previousText = CosmasProto.FileVersion.parseFrom(it.getContent()).content.toStringUtf8()
+            }
+        }
+        patchList.sortBy { patch -> patch.timestamp }
+        return Pair(patchList, previousText)
+    }
+
+
+    override fun deletePatch(request: CosmasProto.DeletePatchRequest,
+                             responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
+        // Timestamp of file version witch contains patch
+        val versionTimestamp = this.storage.get(BlobId.of(this.bucketName, request.fileId, request.generation)).createTime
+        // Text of version from which patch was applied (version before version witch contains patch)
+        val (patchList, text) = try {
+            getPatchListAndPreviousText(request.fileId, versionTimestamp)
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        var indexCandidateDeletePatch = -1
+        for ((patchIndex, patch) in patchList.iterator().withIndex()) {
+            if (patch.timestamp == request.patchTimestamp) {
+                indexCandidateDeletePatch = patchIndex
+                break
+            }
+        }
+        if (indexCandidateDeletePatch == -1) {
+            val requestStatus = Status.NOT_FOUND.withDescription(
+                    "Can't delete patch. There is no such patch in storage")
+            responseObserver.onError(StatusException(requestStatus))
+            return
+        }
+        val textWithoutPatch: String
+        try {
+            val textBeforeCandidateDelete = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+            val finishText = CosmasProto.FileVersion.parseFrom(
+                    this.storage.get(BlobId.of(this.bucketName, request.fileId)).getContent()).content.toStringUtf8()
+            textWithoutPatch = PatchCorrector.applyPatch(
+                    PatchCorrector.deletePatch(
+                            patchList[indexCandidateDeletePatch],
+                            patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
+                            textBeforeCandidateDelete),
+                    finishText)
+        } catch (e: PatchCorrector.ApplyPatchException) {
+            val status = Status.INTERNAL.withDescription(e.message)
+            LOG.error("Can't apply patch: ${e.message}")
+            responseObserver.onError(StatusException(status))
+            return
+        }
+        val response = CosmasProto.DeletePatchResponse.newBuilder()
+        response.content = ByteString.copyFromUtf8(textWithoutPatch)
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)
@@ -182,4 +253,5 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
         return CosmasProto.FileVersion.parseFrom(blob?.getContent()).patchesList
     }
+
 }

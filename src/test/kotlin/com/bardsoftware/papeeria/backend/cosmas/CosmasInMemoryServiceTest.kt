@@ -152,7 +152,7 @@ class CosmasInMemoryServiceTest {
 
     private fun addPatchToService(text: String, user: String, fileId: String, time: Long) {
         val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
-        val newPatch = CosmasProto.Patch.newBuilder().setUserId(user).setText(text).setTimeStamp(time).build()
+        val newPatch = CosmasProto.Patch.newBuilder().setUserId(user).setText(text).setTimestamp(time).build()
         val newPatchRequest = CosmasProto.CreatePatchRequest
                 .newBuilder()
                 .setFileId(fileId)
