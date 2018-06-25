@@ -507,6 +507,28 @@ class CosmasGoogleCloudServiceTest {
                 eq(cemetery.toBuilder().addCemetery(newCoffin).build().toByteArray()))
     }
 
+    @Test
+    fun deletedFileList() {
+        val fakeStorage = mock(Storage::class.java)
+        val projectId = "1"
+        val fileId = "1"
+        val time = 1L
+        val coffin = CosmasProto.FileCoffin.newBuilder().
+                setProjectId(projectId).
+                setFileId(fileId).
+                setFileName("file").
+                setRemovalTimestamp(time).
+                build()
+        val cemetery = FileCemetery.newBuilder().addCemetery(coffin).build()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, projectId)))).thenReturn(cemeteryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val streamRecorder = deletedFileList(projectId)
+        assertNull(streamRecorder.error)
+        Mockito.verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, projectId)))
+        assertEquals(DeletedFileListResponse.newBuilder().addFiles(coffin).build(), streamRecorder.values[0])
+    }
+
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
         val (getVersionRecorder, getVersionRequest) = getStreamRecorderAndRequestForGettingVersion(version, fileId, projectId)
         this.service.getVersion(getVersionRequest, getVersionRecorder)
@@ -628,6 +650,15 @@ class CosmasGoogleCloudServiceTest {
                 build()
         this.service.deleteFile(deleteFileRequest, deleteFileRecorder)
         return deleteFileRecorder
+    }
+
+    private fun deletedFileList(projectId: String) : StreamRecorder<DeletedFileListResponse> {
+        val deletedFileListRecorder: StreamRecorder<DeletedFileListResponse> = StreamRecorder.create()
+        val deletedFileListRequest = DeletedFileListRequest.newBuilder().
+                setProjectId(projectId).
+                build()
+        this.service.deletedFileList(deletedFileListRequest, deletedFileListRecorder)
+        return deletedFileListRecorder
     }
 
     private fun getMockedBlobWithCemetery(cemetery: FileCemetery) : Blob {
