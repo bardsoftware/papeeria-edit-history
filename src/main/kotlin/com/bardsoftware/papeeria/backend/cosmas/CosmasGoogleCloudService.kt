@@ -226,6 +226,59 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
+    override fun deleteFile(request: CosmasProto.DeleteFileRequest, responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) {
+        LOG.info("Get request for delete file \"${request.fileName}\" # ${request.fileId}")
+        val cemeteryName = request.projectId
+        val cemeteryBytes: Blob? = try {
+            this.storage.get(BlobId.of(this.bucketName, cemeteryName))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val newCoffin = CosmasProto.FileCoffin.newBuilder().
+                setProjectId(request.projectId).
+                setFileId(request.fileId).
+                setFileName(request.fileName).
+                setRemovalTimestamp(request.removalTimestamp).
+                build()
+        val cemetery = if (cemeteryBytes == null) {
+            CosmasProto.FileCemetery.newBuilder()
+        } else {
+            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+        }
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(this.bucketName, cemeteryName).build(),
+                    cemetery.addCemetery(newCoffin).build().toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val response = CosmasProto.DeleteFileResponse.newBuilder().build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    override fun deletedFileList(request: CosmasProto.DeletedFileListRequest, responseObserver: StreamObserver<CosmasProto.DeletedFileListResponse>) {
+        LOG.info("Get request for list deleted files in project # ${request.projectId}")
+        val cemeteryName = request.projectId
+        val cemeteryBytes: Blob? = try {
+            this.storage.get(BlobId.of(this.bucketName, cemeteryName))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val cemetery = if (cemeteryBytes == null) {
+            CosmasProto.FileCemetery.newBuilder()
+        } else {
+            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+        }
+        val response = CosmasProto.DeletedFileListResponse.newBuilder()
+        response.addAllFiles(cemetery.cemeteryList)
+        responseObserver.onNext(response.build())
+        responseObserver.onCompleted()
+    }
+
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)

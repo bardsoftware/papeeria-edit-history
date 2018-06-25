@@ -26,6 +26,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
+import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.Mockito.*
 
@@ -483,6 +484,29 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(newPatch("-4", "patch4", 4), list2[1])
     }
 
+    @Test
+    fun deleteFile() {
+        val fakeStorage = mock(Storage::class.java)
+        val projectId = "1"
+        val fileId = "1"
+        val time = 1L
+        val cemetery = FileCemetery.newBuilder().addAllCemetery(mutableListOf()).build()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, projectId)))).thenReturn(cemeteryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val streamRecorder = deleteFile(projectId, fileId, "file", time)
+        assertNull(streamRecorder.error)
+        Mockito.verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, projectId)))
+        val newCoffin = CosmasProto.FileCoffin.newBuilder().
+                setProjectId(projectId).
+                setFileId(fileId).
+                setFileName("file").
+                setRemovalTimestamp(time).
+                build()
+        Mockito.verify(fakeStorage).create(eq(BlobInfo.newBuilder(this.BUCKET_NAME, projectId).build()),
+                eq(cemetery.toBuilder().addCemetery(newCoffin).build().toByteArray()))
+    }
+
     private fun getFileFromService(version: Long, fileId: String = "0", projectId: String = "0"): String {
         val (getVersionRecorder, getVersionRequest) = getStreamRecorderAndRequestForGettingVersion(version, fileId, projectId)
         this.service.getVersion(getVersionRequest, getVersionRecorder)
@@ -592,5 +616,23 @@ class CosmasGoogleCloudServiceTest {
 
     private fun newPatch(userId: String, text: String, timeStamp: Long): CosmasProto.Patch {
         return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimestamp(timeStamp).build()
+    }
+
+    private fun deleteFile(projectId: String, fileId: String, fileName: String, time: Long) : StreamRecorder<DeleteFileResponse> {
+        val deleteFileRecorder: StreamRecorder<DeleteFileResponse> = StreamRecorder.create()
+        val deleteFileRequest = DeleteFileRequest.newBuilder().
+                setProjectId(projectId).
+                setFileId(fileId).
+                setFileName(fileName).
+                setRemovalTimestamp(time).
+                build()
+        this.service.deleteFile(deleteFileRequest, deleteFileRecorder)
+        return deleteFileRecorder
+    }
+
+    private fun getMockedBlobWithCemetery(cemetery: FileCemetery) : Blob {
+        val blob = mock(Blob::class.java)
+        Mockito.`when`(blob.getContent()).thenReturn(cemetery.toByteArray())
+        return blob
     }
 }
