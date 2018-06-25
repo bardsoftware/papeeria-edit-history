@@ -169,8 +169,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         blobs.iterateAll().forEach {
             if (it.createTime >= timestamp) {
                 patchList.addAll(CosmasProto.FileVersion.parseFrom(it.getContent()).patchesList)
-            }
-            else if (it.createTime > closestTimestamp) {
+            } else if (it.createTime > closestTimestamp) {
                 closestTimestamp = it.createTime
                 previousText = CosmasProto.FileVersion.parseFrom(it.getContent()).content.toStringUtf8()
             }
