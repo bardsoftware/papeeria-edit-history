@@ -18,6 +18,7 @@ import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
+import com.xenomachina.argparser.mainBody
 import org.slf4j.LoggerFactory
 
 /**
@@ -49,9 +50,11 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
     }
 }
 
-fun main(args: Array<String>) {
+
+fun main(args: Array<String>) = mainBody {
     val LOG = LoggerFactory.getLogger("server main")
-    val arg = CosmasServerArgs(ArgParser(args))
+    val parser = ArgParser(args)
+    val arg = CosmasServerArgs(parser)
     LOG.info("Try to bind in port ${arg.port}")
     val server =
             if (arg.bucket != "") {
@@ -65,6 +68,10 @@ fun main(args: Array<String>) {
 }
 
 class CosmasServerArgs(parser: ArgParser) {
-    val port: Int by parser.storing("--port", help = "choose port that server will listen to") { toInt() }.default { 50051 }
-    val bucket: String by parser.storing("--bucket", help = "choose Google Cloud bucket for files storing")
+    val port: Int by parser.storing("--port",
+            help = "choose port that server will listen to, 50051 by default") { toInt() }.
+            default { 50051 }
+    val bucket: String by parser.storing("--bucket",
+            help = "choose Google Cloud bucket for files storing, \"papeeria-interns-cosmas\" by default").
+            default { "papeeria-interns-cosmas" }
 }
