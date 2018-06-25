@@ -174,8 +174,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     fun getPatchListFromStorage(fileId: String, version: Long): List<CosmasProto.Patch>? {
         val blob: Blob? = try {
-            this.storage.get(BlobInfo.newBuilder(this.bucketName, fileId).build().blobId,
-                    Storage.BlobGetOption.generationMatch(version))
+            this.storage.get(BlobId.of(this.bucketName, fileId, version))
         } catch (e: StorageException) {
             return null
         }
