@@ -23,15 +23,14 @@ message FileVersionInfo {
     int64 timestamp = 2;
 }
 
-message FileCoffin {
-    string projectId = 1;
-    string fileId = 2;
-    string fileName = 3;
-    int64 removalTimestamp = 4;
+message FileTomb {
+    string fileId = 1;
+    string fileName = 2;
+    int64 removalTimestamp = 3;
 }
 
 message FileCemetery {
-    repeated FileCoffin cemetery = 1;
+    repeated FileTomb cemetery = 1;
 }
 
 message Patch {
@@ -119,7 +118,7 @@ message DeletedFileListRequest {
 }
 
 message DeletedFileListResponse {
-    repeated FileCoffin files = 1;
+    repeated FileTomb files = 1;
 }
 
 

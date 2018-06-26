@@ -227,16 +227,15 @@ class CosmasGoogleCloudService(private val bucketName: String,
     }
 
     override fun deleteFile(request: CosmasProto.DeleteFileRequest, responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) {
-        LOG.info("Get request for delete file \"${request.fileName}\" # ${request.fileId}")
-        val cemeteryName = request.projectId
+        LOG.info("""Get request for delete file "${request.fileName}" # ${request.fileId}""")
+        val cemeteryName = "${request.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(BlobId.of(this.bucketName, cemeteryName))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
         }
-        val newCoffin = CosmasProto.FileCoffin.newBuilder().
-                setProjectId(request.projectId).
+        val newTomb = CosmasProto.FileTomb.newBuilder().
                 setFileId(request.fileId).
                 setFileName(request.fileName).
                 setRemovalTimestamp(request.removalTimestamp).
@@ -249,7 +248,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         try {
             this.storage.create(
                     BlobInfo.newBuilder(this.bucketName, cemeteryName).build(),
-                    cemetery.addCemetery(newCoffin).build().toByteArray())
+                    cemetery.addCemetery(newTomb).build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -261,7 +260,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun deletedFileList(request: CosmasProto.DeletedFileListRequest, responseObserver: StreamObserver<CosmasProto.DeletedFileListResponse>) {
         LOG.info("Get request for list deleted files in project # ${request.projectId}")
-        val cemeteryName = request.projectId
+        val cemeteryName = "${request.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(BlobId.of(this.bucketName, cemeteryName))
         } catch (e: StorageException) {
