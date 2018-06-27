@@ -206,6 +206,7 @@ class CosmasGoogleCloudServiceTest {
     fun addPatch() {
         val patch1 = diffPatch(USER_ID, "", "kek", 1)
         val patch2 = diffPatch(USER_ID, "kek", "kek lol", 2)
+        System.out.println(patch1)
         addPatchToService(patch1)
         addPatchToService(patch2)
         val patchList = this.service.getPatchList(PROJECT_ID, FILE_ID)
@@ -242,6 +243,7 @@ class CosmasGoogleCloudServiceTest {
     fun incorrectPatch() {
         val patch = newPatch(USER_ID, "kek", 1)
         addPatchToService(patch)
+        commit()
     }
 
     @Test

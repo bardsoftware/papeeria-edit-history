@@ -63,16 +63,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
             val project = this.fileBuffer.getValue(request.projectId)
             val fileVersion = project[request.fileId]
             if (fileVersion != null) {
-                val text = fileVersion.content.toStringUtf8()
-                val newText = PatchCorrector.applyPatch(listOf(request.patch), text)
-                project[request.fileId] = fileVersion.toBuilder().
-                        addPatches(request.patch).
-                        setContent(ByteString.copyFrom(newText.toByteArray()))
-                        .build()
+                project[request.fileId] = fileVersion.toBuilder().addPatches(request.patch).build()
             } else {
-                val newText = PatchCorrector.applyPatch(listOf(request.patch), "")
                 project[request.fileId] = CosmasProto.FileVersion.newBuilder().
-                        setContent(ByteString.copyFrom(newText.toByteArray())).
+                        setContent(ByteString.copyFrom("".toByteArray())).
                         addPatches(request.patch).
                         build()
             }
@@ -97,10 +91,16 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
         try {
             for ((fileId, fileVersion) in project) {
+                val text = fileVersion.content.toStringUtf8()
+                val patches = mutableListOf<CosmasProto.Patch>()
+                patches.addAll(fileVersion.patchesList)
+                patches.sortBy { it.timestamp }
+                val newText = PatchCorrector.applyPatch(patches, text)
+                val newVersion = fileVersion.toBuilder().setContent(ByteString.copyFrom(newText.toByteArray()))
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
-                        fileVersion.toByteArray())
-                project[fileId] = fileVersion.toBuilder().clearPatches().build()
+                        newVersion.build().toByteArray())
+                project[fileId] = newVersion.clearPatches().build()
             }
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
