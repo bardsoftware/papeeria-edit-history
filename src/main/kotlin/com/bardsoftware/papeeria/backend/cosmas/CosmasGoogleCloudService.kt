@@ -63,9 +63,18 @@ class CosmasGoogleCloudService(private val bucketName: String,
             val project = this.fileBuffer.getValue(request.projectId)
             val fileVersion = project[request.fileId]
             if (fileVersion != null) {
-                project[request.fileId] = fileVersion.toBuilder().addPatches(request.patch).build()
+                val text = fileVersion.content.toStringUtf8()
+                val newText = PatchCorrector.applyPatch(listOf(request.patch), text)
+                project[request.fileId] = fileVersion.toBuilder().
+                        addPatches(request.patch).
+                        setContent(ByteString.copyFrom(newText.toByteArray()))
+                        .build()
             } else {
-                project[request.fileId] = CosmasProto.FileVersion.newBuilder().addPatches(request.patch).build()
+                val newText = PatchCorrector.applyPatch(listOf(request.patch), "")
+                project[request.fileId] = CosmasProto.FileVersion.newBuilder().
+                        setContent(ByteString.copyFrom(newText.toByteArray())).
+                        addPatches(request.patch).
+                        build()
             }
             this.fileBuffer[request.projectId] = project
         }
@@ -91,8 +100,8 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 this.storage.create(
                         BlobInfo.newBuilder(this.bucketName, fileId).build(),
                         fileVersion.toByteArray())
+                project[fileId] = fileVersion.toBuilder().clearPatches().build()
             }
-            project.clear()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -234,11 +243,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
             handleStorageException(e, responseObserver)
             return
         }
-        val newTomb = CosmasProto.FileTomb.newBuilder().
-                setFileId(request.fileId).
-                setFileName(request.fileName).
-                setRemovalTimestamp(request.removalTimestamp).
-                build()
+        val newTomb = CosmasProto.FileTomb.newBuilder().setFileId(request.fileId).setFileName(request.fileName).setRemovalTimestamp(request.removalTimestamp).build()
         val cemetery = if (cemeteryBytes == null) {
             CosmasProto.FileCemetery.newBuilder()
         } else {
@@ -293,6 +298,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     fun getPatchList(projectId: String, fileId: String): List<CosmasProto.Patch>? {
         return fileBuffer[projectId]?.get(fileId)?.patchesList
+    }
+
+    fun getFileFromBuffer(projectId: String, fileId: String): String? {
+        return fileBuffer[projectId]?.get(fileId)?.content?.toStringUtf8()
     }
 
     fun getPatchListFromStorage(fileId: String, version: Long): List<CosmasProto.Patch>? {
