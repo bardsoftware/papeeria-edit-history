@@ -239,6 +239,57 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("kekes", getFileFromService(0, FILE_ID, PROJECT_ID))
     }
 
+    @Test
+    fun twoCommitsWithPatches() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver2", 0)
+        val blob2 = getMockedBlob("ver4", 1)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver2".toByteArray())))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver4".toByteArray())))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        val patch3 = diffPatch(USER_ID, "ver2", "ver3", 3)
+        val patch4 = diffPatch(USER_ID, "ver3", "ver4", 4)
+        addPatchToService(patch1)
+        addPatchToService(patch2)
+        commit()
+        addPatchToService(patch3)
+        addPatchToService(patch4)
+        commit()
+        assertEquals("ver2", getFileFromService(0))
+        assertEquals("ver4", getFileFromService(1))
+        verify(fakeStorage, never()).create(any(BlobInfo::class.java), eq("ver1".toByteArray()))
+        verify(fakeStorage, never()).create(any(BlobInfo::class.java), eq("ver3".toByteArray()))
+    }
+
+    @Test
+    fun twoFilesInProjectWithPatches() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("file1", 0)
+        val blob2 = getMockedBlob("file2", 0)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver2".toByteArray())))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), eq("ver4".toByteArray())))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "file1", 1)
+        val patch2 = diffPatch(USER_ID, "", "file2", 2)
+        addPatchToService(patch1, "1", PROJECT_ID)
+        addPatchToService(patch2, "2", PROJECT_ID)
+        commit(PROJECT_ID)
+        assertEquals("file1", getFileFromService(0))
+        assertEquals("file2", getFileFromService(1))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun incorrectPatch() {
         val patch = newPatch(USER_ID, "kek", 1)
