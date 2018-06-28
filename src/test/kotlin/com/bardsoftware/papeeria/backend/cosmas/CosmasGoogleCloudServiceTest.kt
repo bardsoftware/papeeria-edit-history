@@ -14,6 +14,7 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
@@ -619,10 +620,6 @@ class CosmasGoogleCloudServiceTest {
         this.service.commitVersion(commitRequest, commitRecorder)
     }
 
-    private fun addPatchToService(text: String, userId: String, fileId: String, timeStamp: Long, projectId: String) {
-        addPatchToService(newPatch(userId, text, timeStamp), fileId, projectId)
-    }
-
     private fun addPatchToService(patch: Patch, fileId: String = FILE_ID, projectId: String = PROJECT_ID) {
         val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
         val newPatchRequest = CosmasProto.CreatePatchRequest.newBuilder()
@@ -672,6 +669,12 @@ class CosmasGoogleCloudServiceTest {
 
     private fun diffPatch(userId: String, text1: String, text2: String, timeStamp: Long): Patch {
         val text = dmp.patch_toText(dmp.patch_make(text1, text2))
-        return CosmasProto.Patch.newBuilder().setText(text).setUserId(userId).setTimestamp(timeStamp).build()
+        return CosmasProto.Patch
+                .newBuilder()
+                .setText(text)
+                .setUserId(userId)
+                .setTimestamp(timeStamp)
+                .setActualHash(md5Hash(text2))
+                .build()
     }
 }
