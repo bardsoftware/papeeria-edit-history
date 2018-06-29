@@ -23,6 +23,11 @@ message FileVersionInfo {
     int64 timestamp = 2;
 }
 
+message FileInfo {
+    string projectId = 1;
+    string fileId = 2;
+}
+
 message FileTomb {
     string fileId = 1;
     string fileName = 2;
@@ -37,6 +42,7 @@ message Patch {
     string userId = 1;
     string text = 2;
     int64 timestamp = 3;
+    string actualHash = 4;
 }
 
 message GetVersionRequest {
@@ -61,8 +67,8 @@ message CreateVersionResponse {
 
 message CreatePatchRequest {
     string projectId = 1;
-    Patch patch = 2;
-    string fileId = 3;
+    string fileId = 2;
+    Patch patch = 3;
 }
 
 message CreatePatchResponse {
@@ -83,7 +89,7 @@ message CommitVersionRequest {
 }
 
 message CommitVersionResponse {
-
+    repeated FileInfo badFiles = 1;
 }
 
 message FileVersion {
@@ -121,6 +127,17 @@ message DeletedFileListResponse {
     repeated FileTomb files = 1;
 }
 
+message ForcedFileCommitRequest {
+    string projectId = 1;
+    string fileId = 2;
+    int64 timestamp = 3;
+    bytes actualContent = 4;
+}
+
+message ForcedFileCommitResponse {
+
+}
+
 
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
@@ -138,5 +155,7 @@ service Cosmas {
     rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) {
     }
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
+    }
+    rpc ForcedFileCommit (ForcedFileCommitRequest) returns (ForcedFileCommitResponse) {
     }
 }
