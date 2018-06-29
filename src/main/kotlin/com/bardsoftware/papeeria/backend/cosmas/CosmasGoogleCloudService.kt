@@ -22,6 +22,7 @@ import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
+import name.fraser.neil.plaintext.diff_match_patch
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -319,6 +320,49 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onCompleted()
     }
 
+    override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
+                                  responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) {
+        LOG.info("Get request for commit file # ${request.fileId} in force")
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getValue(request.projectId)
+        }
+        val potentialVersion = synchronized(project) {
+            project[request.fileId]
+        }
+        val previousVersion = potentialVersion?.content?.toStringUtf8() ?: ""
+        val actualVersion = request.actualContent.toStringUtf8()
+        val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(previousVersion, actualVersion))
+        val patch = CosmasProto.Patch.newBuilder()
+                .setText(diffPatch)
+                .setUserId("0")
+                .setTimestamp(System.currentTimeMillis())
+                .setActualHash(md5Hash(actualVersion))
+                .build()
+        val newVersion = CosmasProto.FileVersion.newBuilder()
+                .addPatches(patch)
+                .setContent(ByteString.copyFrom(actualVersion.toByteArray()))
+                .build()
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(this.bucketName, request.fileId).build(),
+                    newVersion.toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        synchronized(project) {
+            project[request.fileId] = newVersion.toBuilder()
+                    .clearPatches()
+                    .build()
+        }
+        synchronized(this.fileBuffer) {
+            this.fileBuffer[request.projectId] = project
+        }
+        val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)
@@ -335,10 +379,6 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     fun getPatchList(projectId: String, fileId: String): List<CosmasProto.Patch>? {
         return fileBuffer[projectId]?.get(fileId)?.patchesList
-    }
-
-    fun getFileFromBuffer(projectId: String, fileId: String): String? {
-        return fileBuffer[projectId]?.get(fileId)?.content?.toStringUtf8()
     }
 
     fun getPatchListFromStorage(fileId: String, version: Long): List<CosmasProto.Patch>? {
