@@ -44,6 +44,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         fun md5Hash(text: String): String {
             return Hashing.md5().newHasher().putString(text, Charsets.UTF_8).hash().toString()
         }
+
         val COSMAS_ID = "robot:::cosmas"
     }
 
@@ -113,8 +114,8 @@ class CosmasGoogleCloudService(private val bucketName: String,
                     patches.sortBy { it.timestamp }
 
                     val newText = PatchCorrector.applyPatch(patches, text)
-
-                    if (patches.isEmpty() || patches.last().actualHash == md5Hash(newText)) {
+                    val cosmasHash = md5Hash(newText)
+                    if (patches.isEmpty() || patches.last().actualHash == cosmasHash) {
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
                         this.storage.create(
@@ -124,7 +125,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
                                 .clearPatches()
                                 .build()
                     } else {
-                        LOG.error("File # $fileId version in Cosmas not equals to version in Papeeria")
+                        val actualHash = patches.last().actualHash
+                        LOG.error("Commit failure: " +
+                                "File # $fileId has Cosmas hash=$cosmasHash, but last actual hash=$actualHash")
                         val badFile = CosmasProto.FileInfo.newBuilder()
                                 .setFileId(fileId)
                                 .setProjectId(request.projectId)
