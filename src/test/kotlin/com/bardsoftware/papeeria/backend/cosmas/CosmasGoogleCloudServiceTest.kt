@@ -14,6 +14,7 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_ID
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
@@ -280,26 +281,18 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("file2", getFileFromService(0, "2"))
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun incorrectPatch() {
-        val patch = newPatch(USER_ID, "kek", 1)
-        addPatchToService(patch)
-        commit()
-    }
-
-
 
     @Test
     fun simpleForcedCommit() {
         val patch = diffPatch(USER_ID, "", "never applies", 1)
         addPatchToService(patch)
-        forcedCommit("data")
+        forcedCommit("data", 2)
         assertEquals("data", getFileFromService(0))
     }
 
     @Test
     fun forcedCommitEmptyFile() {
-        forcedCommit("data")
+        forcedCommit("data", 1)
         assertEquals("data", getFileFromService(0))
     }
 
@@ -315,14 +308,39 @@ class CosmasGoogleCloudServiceTest {
         commit()
         val uselessPatch = diffPatch(USER_ID, "lol", "kek", 2)
         addPatchToService(uselessPatch)
-        forcedCommit("ver2")
-        //val diffPatch = diffPatch("0", "ver1", "ver2", System.currentTimeMillis())
+        forcedCommit("ver2", 3)
+        val diffPatch = diffPatch(COSMAS_ID, "ver1", "ver2", 3)
         val ver1 = createFileVersion("ver1").toBuilder().addAllPatches(listOf(patch)).build()
-        //val ver2 = createFileVersion("ver2").toBuilder().addAllPatches(listOf(diffPatch)).build()
+        val ver2 = createFileVersion("ver2").toBuilder().addAllPatches(listOf(diffPatch)).build()
+        println(ver2)
         verify(fakeStorage).create(any(BlobInfo::class.java),
                 eq(ver1.toByteArray()))
-        //verify(fakeStorage).create(any(BlobInfo::class.java),
-        //        eq(ver2.toByteArray()))
+        verify(fakeStorage).create(any(BlobInfo::class.java),
+                eq(ver2.toByteArray()))
+    }
+
+    @Test
+    fun failedCommitBecauseOfBadPatch() {
+        val patch = newPatch(USER_ID, "kek", 1)
+        addPatchToService(patch)
+        val badFiles = commit()
+        val expected = FileInfo.newBuilder()
+                .setProjectId(PROJECT_ID)
+                .setFileId(FILE_ID)
+                .build()
+        assertEquals(mutableListOf(expected), badFiles)
+    }
+
+    @Test
+    fun failedCommitBecauseOfWrongHash() {
+        val patch = diffPatch(USER_ID, "", "lol", 1, "it's not a hash")
+        addPatchToService(patch)
+        val badFiles = commit()
+        val expected = FileInfo.newBuilder()
+                .setProjectId(PROJECT_ID)
+                .setFileId(FILE_ID)
+                .build()
+        assertEquals(mutableListOf(expected), badFiles)
     }
 
     @Test
@@ -341,7 +359,6 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(newPatch("-1", "patch1", 1), list[0])
         assertEquals(newPatch("-2", "patch2", 2), list[1])
     }
-
 
 
     @Test
@@ -626,7 +643,7 @@ class CosmasGoogleCloudServiceTest {
         return blob
     }
 
-    private fun createFileVersion(fileContent: String) : FileVersion {
+    private fun createFileVersion(fileContent: String): FileVersion {
         return FileVersion.newBuilder().setContent(
                 ByteString.copyFrom(fileContent.toByteArray())).build()
     }
@@ -649,9 +666,10 @@ class CosmasGoogleCloudServiceTest {
         return Pair(commitRecorder, commitRequest)
     }
 
-    private fun commit(projectId: String = PROJECT_ID) {
+    private fun commit(projectId: String = PROJECT_ID): MutableList<FileInfo> {
         val (commitRecorder, commitRequest) = getStreamRecorderAndRequestForCommitVersions(projectId)
         this.service.commitVersion(commitRequest, commitRecorder)
+        return commitRecorder.values[0].badFilesList
     }
 
     private fun addPatchToService(patch: Patch, fileId: String = FILE_ID, projectId: String = PROJECT_ID) {
@@ -712,11 +730,24 @@ class CosmasGoogleCloudServiceTest {
                 .build()
     }
 
-    private fun forcedCommit(content: String, projectId: String = PROJECT_ID, fileId: String = FILE_ID) {
+    private fun diffPatch(userId: String, text1: String, text2: String, timeStamp: Long, hash: String): Patch {
+        val text = dmp.patch_toText(dmp.patch_make(text1, text2))
+        return CosmasProto.Patch
+                .newBuilder()
+                .setText(text)
+                .setUserId(userId)
+                .setTimestamp(timeStamp)
+                .setActualHash(hash)
+                .build()
+    }
+
+    private fun forcedCommit(content: String, timestamp: Long, projectId: String = PROJECT_ID,
+                             fileId: String = FILE_ID) {
         val recorder: StreamRecorder<ForcedFileCommitResponse> = StreamRecorder.create()
         val request = ForcedFileCommitRequest.newBuilder()
                 .setProjectId(projectId)
                 .setFileId(fileId)
+                .setTimestamp(timestamp)
                 .setActualContent(ByteString.copyFrom(content.toByteArray()))
                 .build()
         this.service.forcedFileCommit(request, recorder)

@@ -130,7 +130,8 @@ message DeletedFileListResponse {
 message ForcedFileCommitRequest {
     string projectId = 1;
     string fileId = 2;
-    bytes actualContent = 3;
+    int64 timestamp = 3;
+    bytes actualContent = 4;
 }
 
 message ForcedFileCommitResponse {

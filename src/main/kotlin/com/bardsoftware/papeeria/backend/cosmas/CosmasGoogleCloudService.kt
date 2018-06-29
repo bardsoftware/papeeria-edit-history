@@ -44,6 +44,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         fun md5Hash(text: String): String {
             return Hashing.md5().newHasher().putString(text, Charsets.UTF_8).hash().toString()
         }
+        val COSMAS_ID = "robot:::cosmas"
     }
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
@@ -123,18 +124,26 @@ class CosmasGoogleCloudService(private val bucketName: String,
                                 .clearPatches()
                                 .build()
                     } else {
+                        LOG.error("File # $fileId version in Cosmas not equals to version in Papeeria")
                         val badFile = CosmasProto.FileInfo.newBuilder()
                                 .setFileId(fileId)
                                 .setProjectId(request.projectId)
                                 .build()
                         response.addBadFiles(badFile)
                     }
-                } catch (e: PatchCorrector.ApplyPatchException) {
-                    val badFile = CosmasProto.FileInfo.newBuilder()
-                            .setFileId(fileId)
-                            .setProjectId(request.projectId)
-                            .build()
-                    response.addBadFiles(badFile)
+                } catch (e: Throwable) {
+                    LOG.error("Error while applying patches to file # $fileId")
+                    when (e) {
+                        is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                            val badFile = CosmasProto.FileInfo.newBuilder()
+                                    .setFileId(fileId)
+                                    .setProjectId(request.projectId)
+                                    .build()
+                            response.addBadFiles(badFile)
+                        }
+                        else -> throw e
+                    }
+
                 }
             }
         } catch (e: StorageException) {
@@ -334,14 +343,15 @@ class CosmasGoogleCloudService(private val bucketName: String,
         val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(previousVersion, actualVersion))
         val patch = CosmasProto.Patch.newBuilder()
                 .setText(diffPatch)
-                .setUserId("0")
-                .setTimestamp(System.currentTimeMillis())
+                .setUserId(COSMAS_ID)
+                .setTimestamp(request.timestamp)
                 .setActualHash(md5Hash(actualVersion))
                 .build()
         val newVersion = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
                 .setContent(ByteString.copyFrom(actualVersion.toByteArray()))
                 .build()
+        println(newVersion.toString())
         try {
             this.storage.create(
                     BlobInfo.newBuilder(this.bucketName, request.fileId).build(),
