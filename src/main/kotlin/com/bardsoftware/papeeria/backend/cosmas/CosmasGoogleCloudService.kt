@@ -338,10 +338,17 @@ class CosmasGoogleCloudService(private val bucketName: String,
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getValue(request.projectId)
         }
-        val potentialVersion = synchronized(project) {
-            project[request.fileId]
+        // get last version from storage
+        val blob: Blob? = try {
+            this.storage.get(BlobId.of(this.bucketName, request.fileId))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
         }
-        val previousVersion = potentialVersion?.content?.toStringUtf8() ?: ""
+        val previousVersion = if (blob != null) {
+            CosmasProto.FileVersion.parseFrom(blob.getContent()).content.toStringUtf8()
+        } else ""
+
         val actualVersion = request.actualContent.toStringUtf8()
         val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(previousVersion, actualVersion))
         val patch = CosmasProto.Patch.newBuilder()
@@ -354,7 +361,6 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 .addPatches(patch)
                 .setContent(ByteString.copyFrom(actualVersion.toByteArray()))
                 .build()
-        println(newVersion.toString())
         try {
             this.storage.create(
                     BlobInfo.newBuilder(this.bucketName, request.fileId).build(),
