@@ -300,23 +300,23 @@ class CosmasGoogleCloudServiceTest {
     fun forcedCommitBetweenCommits() {
         val fakeStorage: Storage = mock(Storage::class.java)
         val blob1 = getMockedBlob("ver1", 0)
-        val blob2 = getMockedBlob("ver2", 0)
-        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         val patch = diffPatch(USER_ID, "", "ver1", 1)
         addPatchToService(patch)
-        commit()
+        val badFiles = commit()
+        assertTrue(badFiles.isEmpty())
         val uselessPatch = diffPatch(USER_ID, "lol", "kek", 2)
         addPatchToService(uselessPatch)
         forcedCommit("ver2", 3)
         val diffPatch = diffPatch(COSMAS_ID, "ver1", "ver2", 3)
         val ver1 = createFileVersion("ver1").toBuilder().addAllPatches(listOf(patch)).build()
         val ver2 = createFileVersion("ver2").toBuilder().addAllPatches(listOf(diffPatch)).build()
-        println(ver2)
         verify(fakeStorage).create(any(BlobInfo::class.java),
                 eq(ver1.toByteArray()))
         verify(fakeStorage).create(any(BlobInfo::class.java),
                 eq(ver2.toByteArray()))
+        verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, FILE_ID)))
     }
 
     @Test
