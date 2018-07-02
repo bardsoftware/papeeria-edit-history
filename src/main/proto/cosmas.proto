@@ -68,7 +68,7 @@ message CreateVersionResponse {
 message CreatePatchRequest {
     string projectId = 1;
     string fileId = 2;
-    Patch patch = 3;
+    repeated Patch patches = 3;
 }
 
 message CreatePatchResponse {
