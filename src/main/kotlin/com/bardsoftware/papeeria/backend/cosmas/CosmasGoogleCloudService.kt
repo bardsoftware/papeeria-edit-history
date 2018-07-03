@@ -69,17 +69,17 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patch.userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patchesList[0].userId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.projectId)
             val fileVersion = project[request.fileId]
             if (fileVersion != null) {
                 project[request.fileId] = fileVersion.toBuilder()
-                        .addPatches(request.patch)
+                        .addAllPatches(request.patchesList)
                         .build()
             } else {
                 project[request.fileId] = CosmasProto.FileVersion.newBuilder()
-                        .addPatches(request.patch)
+                        .addAllPatches(request.patchesList)
                         .build()
             }
             this.fileBuffer[request.projectId] = project

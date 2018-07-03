@@ -210,12 +210,21 @@ class CosmasGoogleCloudServiceTest {
     fun addPatch() {
         val patch1 = diffPatch(USER_ID, "", "kek", 1)
         val patch2 = diffPatch(USER_ID, "kek", "kek lol", 2)
-        System.out.println(patch1)
         addPatchToService(patch1)
         addPatchToService(patch2)
         val patchList = this.service.getPatchList(PROJECT_ID, FILE_ID)
         assertEquals(listOf(patch1, patch2), patchList)
         commit(PROJECT_ID)
+        val file = getFileFromService(0, FILE_ID, PROJECT_ID)
+        assertEquals("kek lol", file)
+    }
+
+    @Test
+    fun addManyPatcherAtSameTime() {
+        val patch2 = diffPatch(USER_ID, "", "kek", 1)
+        val patch1 = diffPatch(USER_ID, "kek", "kek lol", 2)
+        addPatchesToService(listOf(patch1, patch2))
+        commit()
         val file = getFileFromService(0, FILE_ID, PROJECT_ID)
         assertEquals("kek lol", file)
     }
@@ -673,11 +682,15 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun addPatchToService(patch: Patch, fileId: String = FILE_ID, projectId: String = PROJECT_ID) {
+        addPatchesToService(listOf(patch), fileId, projectId)
+    }
+
+    private fun addPatchesToService(patches: List<Patch>, fileId: String = FILE_ID, projectId: String = PROJECT_ID) {
         val createPatchRecorder: StreamRecorder<CosmasProto.CreatePatchResponse> = StreamRecorder.create()
         val newPatchRequest = CosmasProto.CreatePatchRequest.newBuilder()
                 .setFileId(fileId)
                 .setProjectId(projectId)
-                .setPatch(patch)
+                .addAllPatches(patches)
                 .build()
         this.service.createPatch(newPatchRequest, createPatchRecorder)
     }

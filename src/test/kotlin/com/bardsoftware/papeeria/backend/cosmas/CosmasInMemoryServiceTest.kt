@@ -156,7 +156,7 @@ class CosmasInMemoryServiceTest {
         val newPatchRequest = CosmasProto.CreatePatchRequest
                 .newBuilder()
                 .setFileId(fileId)
-                .setPatch(newPatch)
+                .addPatches(newPatch)
                 .build()
         this.service.createPatch(newPatchRequest, createPatchRecorder)
     }
