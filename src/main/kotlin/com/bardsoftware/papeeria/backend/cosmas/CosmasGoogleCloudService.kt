@@ -161,8 +161,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         LOG.info("Get request for version ${request.version} file # ${request.fileId}")
+        val version = if (request.version == -1L) null else request.version
         val blob: Blob? = try {
-            this.storage.get(BlobId.of(this.bucketName, request.fileId, request.version))
+            this.storage.get(BlobId.of(this.bucketName, request.fileId, version))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -379,6 +380,36 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
         val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
         responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
+                                    responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) {
+        LOG.info("Get request for restore deleted file # ${request.fileId}")
+        val cemeteryName = "${request.projectId}-cemetery"
+        val cemeteryBytes: Blob? = try {
+            this.storage.get(BlobId.of(this.bucketName, cemeteryName))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val cemetery = if (cemeteryBytes == null) {
+            CosmasProto.FileCemetery.newBuilder()
+        } else {
+            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+        }
+        val tombs = cemetery.cemeteryList.toMutableList()
+        tombs.removeIf { it -> it.fileId == request.fileId }
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(this.bucketName, cemeteryName).build(),
+                    cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val response = CosmasProto.RestoreDeletedFileResponse.newBuilder()
+        responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
 

@@ -577,19 +577,72 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun deletedFileList() {
         val fakeStorage = mock(Storage::class.java)
-        val projectId = "1"
-        val fileId = "1"
         val time = 1L
-        val cemeteryName = "$projectId-cemetery"
-        val tomb = CosmasProto.FileTomb.newBuilder().setFileId(fileId).setFileName("file").setRemovalTimestamp(time).build()
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file")
+                .setRemovalTimestamp(time)
+                .build()
         val cemetery = FileCemetery.newBuilder().addCemetery(tomb).build()
         val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
         Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))).thenReturn(cemeteryBlob)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
-        val streamRecorder = deletedFileList(projectId)
+        val streamRecorder = deletedFileList(PROJECT_ID)
         assertNull(streamRecorder.error)
         Mockito.verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))
         assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb).build(), streamRecorder.values[0])
+    }
+
+    @Test
+    fun restoreDeletedFileTest() {
+        val fakeStorage = mock(Storage::class.java)
+        val time = 1L
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file")
+                .setRemovalTimestamp(time)
+                .build()
+        val cemetery = FileCemetery.newBuilder().addCemetery(tomb).build()
+        val emptyCemetery = FileCemetery.newBuilder().addAllCemetery(listOf()).build()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))).thenReturn(cemeteryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        restoreDeletedFile()
+        Mockito.verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))
+        Mockito.verify(fakeStorage).create(eq(BlobInfo.newBuilder(BUCKET_NAME, cemeteryName).build()),
+                eq(emptyCemetery.toByteArray()))
+    }
+
+    @Test
+    fun restoreDeletedFileTestWithBigCemetery() {
+        val fakeStorage = mock(Storage::class.java)
+        val time = 1L
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb1 = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file1")
+                .setRemovalTimestamp(1L)
+                .build()
+
+        val tomb2 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("another file")
+                .setFileName("file2")
+                .setRemovalTimestamp(2L)
+                .build()
+        val cemetery = FileCemetery.newBuilder()
+                .addCemetery(tomb1)
+                .addCemetery(tomb2)
+                .build()
+        val expectedCemetery = FileCemetery.newBuilder().addCemetery(tomb2).build()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))).thenReturn(cemeteryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        restoreDeletedFile()
+        Mockito.verify(fakeStorage).get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))
+        Mockito.verify(fakeStorage).create(eq(BlobInfo.newBuilder(BUCKET_NAME, cemeteryName).build()),
+                eq(expectedCemetery.toByteArray()))
     }
 
     private fun getFileFromService(version: Long, fileId: String = FILE_ID, projectId: String = PROJECT_ID): String {
@@ -724,6 +777,17 @@ class CosmasGoogleCloudServiceTest {
         val deletedFileListRequest = DeletedFileListRequest.newBuilder().setProjectId(projectId).build()
         this.service.deletedFileList(deletedFileListRequest, deletedFileListRecorder)
         return deletedFileListRecorder
+    }
+
+    private fun restoreDeletedFile(projectId: String = PROJECT_ID, fileId: String = FILE_ID): StreamRecorder<RestoreDeletedFileResponse> {
+        val recorder: StreamRecorder<RestoreDeletedFileResponse> = StreamRecorder.create()
+        val request = RestoreDeletedFileRequest
+                .newBuilder()
+                .setProjectId(projectId)
+                .setFileId(fileId)
+                .build()
+        this.service.restoreDeletedFile(request, recorder)
+        return recorder
     }
 
     private fun getMockedBlobWithCemetery(cemetery: FileCemetery): Blob {
