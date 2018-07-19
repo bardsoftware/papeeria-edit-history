@@ -562,7 +562,7 @@ class CosmasGoogleCloudServiceTest {
         val fileId = "1"
         val time = 1L
         val cemeteryName = "$projectId-cemetery"
-        val cemetery = FileCemetery.newBuilder().addAllCemetery(listOf()).build()
+        val cemetery = FileCemetery.getDefaultInstance()
         val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
         Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))).thenReturn(cemeteryBlob)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
@@ -605,7 +605,7 @@ class CosmasGoogleCloudServiceTest {
                 .setRemovalTimestamp(time)
                 .build()
         val cemetery = FileCemetery.newBuilder().addCemetery(tomb).build()
-        val emptyCemetery = FileCemetery.newBuilder().addAllCemetery(listOf()).build()
+        val emptyCemetery = FileCemetery.getDefaultInstance()
         val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
         Mockito.`when`(fakeStorage.get(eq(BlobId.of(this.BUCKET_NAME, cemeteryName)))).thenReturn(cemeteryBlob)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
@@ -618,7 +618,6 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun restoreDeletedFileTestWithBigCemetery() {
         val fakeStorage = mock(Storage::class.java)
-        val time = 1L
         val cemeteryName = "$PROJECT_ID-cemetery"
         val tomb1 = CosmasProto.FileTomb.newBuilder()
                 .setFileId(FILE_ID)
@@ -656,7 +655,7 @@ class CosmasGoogleCloudServiceTest {
         val getVersionRecorder: StreamRecorder<GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = GetVersionRequest
                 .newBuilder()
-                .setVersion(version)
+                .setGeneration(version)
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()

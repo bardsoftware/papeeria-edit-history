@@ -160,10 +160,17 @@ class CosmasGoogleCloudService(private val bucketName: String,
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        LOG.info("Get request for version ${request.version} file # ${request.fileId}")
-        val version = if (request.version == -1L) null else request.version
+        // if request.generation is -1, Cosmas will return the latest version of file
+        val generation = if (request.generation == -1L)  {
+            LOG.info("Get request for the latest version of file # ${request.fileId}")
+            null // In GCS if generation is null it returns the latest version
+        } else {
+            LOG.info("Get request for generation ${request.generation} of file # ${request.fileId}")
+            request.generation
+        }
+
         val blob: Blob? = try {
-            this.storage.get(BlobId.of(this.bucketName, request.fileId, version))
+            this.storage.get(BlobId.of(this.bucketName, request.fileId, generation))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -431,9 +438,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
         return fileBuffer[projectId]?.get(fileId)?.patchesList
     }
 
-    fun getPatchListFromStorage(fileId: String, version: Long): List<CosmasProto.Patch>? {
+    fun getPatchListFromStorage(fileId: String, generation: Long): List<CosmasProto.Patch>? {
         val blob: Blob? = try {
-            this.storage.get(BlobId.of(this.bucketName, fileId, version))
+            this.storage.get(BlobId.of(this.bucketName, fileId, generation))
         } catch (e: StorageException) {
             return null
         }
