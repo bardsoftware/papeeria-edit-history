@@ -48,7 +48,7 @@ message Patch {
 message GetVersionRequest {
     string projectId = 1;
     string fileId = 2;
-    int64 version = 3;
+    int64 generation = 3; // if generation is -1, Cosmas will return the latest version of file
 }
 
 message GetVersionResponse {
@@ -135,7 +135,14 @@ message ForcedFileCommitRequest {
 }
 
 message ForcedFileCommitResponse {
+}
 
+message RestoreDeletedFileRequest {
+    string projectId = 1;
+    string fileId = 2;
+}
+
+message RestoreDeletedFileResponse{
 }
 
 
@@ -157,5 +164,7 @@ service Cosmas {
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
     }
     rpc ForcedFileCommit (ForcedFileCommitRequest) returns (ForcedFileCommitResponse) {
+    }
+    rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse){
     }
 }

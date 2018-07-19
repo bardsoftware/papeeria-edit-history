@@ -41,7 +41,7 @@ class CosmasClient(host: String, port: Int) {
         LOG.info("Ask for version: $version")
         addText()
         val request: GetVersionRequest = GetVersionRequest.newBuilder()
-                .setVersion(version)
+                .setGeneration(version)
                 .setProjectId("0")
                 .setFileId("43")
                 .build()

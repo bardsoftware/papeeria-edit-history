@@ -131,7 +131,7 @@ class CosmasInMemoryServiceTest {
         val getVersionRecorder: StreamRecorder<CosmasProto.GetVersionResponse> = StreamRecorder.create()
         val getVersionRequest = CosmasProto.GetVersionRequest
                 .newBuilder()
-                .setVersion(version)
+                .setGeneration(version)
                 .setFileId(fileId)
                 .setProjectId(projectId)
                 .build()

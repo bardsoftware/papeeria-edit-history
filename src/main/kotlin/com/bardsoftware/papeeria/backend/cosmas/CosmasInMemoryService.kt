@@ -62,13 +62,13 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
-        LOG.info("Get request for version ${request.version} file # ${request.fileId}")
+        LOG.info("Get request for version ${request.generation} file # ${request.fileId}")
         val response = CosmasProto.GetVersionResponse.newBuilder()
         synchronized(this.files) {
             val (requestStatus, fileVersions) = verifyGetVersionRequest(request)
             if (requestStatus.isOk) {
                 val fileVersion = CosmasProto.FileVersion.newBuilder()
-                        .setContent(fileVersions[request.version.toInt()])
+                        .setContent(fileVersions[request.generation.toInt()])
                         .build()
                 response.file = fileVersion
                 responseObserver.onNext(response.build())
@@ -87,13 +87,13 @@ class CosmasInMemoryService : CosmasGrpc.CosmasImplBase() {
             fileVersions == null ->
                 Status.INVALID_ARGUMENT.withDescription(
                         "There is no file in storage with file id ${request.fileId}")
-            request.version >= fileVersions.size ->
+            request.generation >= fileVersions.size ->
                 Status.OUT_OF_RANGE.withDescription(
                         "In storage this file has ${fileVersions.size} versions, " +
-                                "but you ask for version ${request.version}")
-            request.version < 0 ->
+                                "but you ask for version ${request.generation}")
+            request.generation < 0 ->
                 Status.OUT_OF_RANGE.withDescription(
-                        "You ask for version ${request.version} that is negative")
+                        "You ask for version ${request.generation} that is negative")
             else -> return Pair(status, fileVersions)
         }
         return Pair(status, emptyList())
