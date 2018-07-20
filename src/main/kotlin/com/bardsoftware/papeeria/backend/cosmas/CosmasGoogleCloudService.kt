@@ -434,7 +434,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
     override fun changeFileId(request: CosmasProto.ChangeFileIdRequest, responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project # ${request.projectId}")
         val prevIds = try {
-            getPrevIds(request.projectId)
+            getPrevIds(request.projectId).toMutableMap()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return

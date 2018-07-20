@@ -721,6 +721,87 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("lol", getFileFromService(1, "2"))
     }
 
+    @Test
+    fun changeFileIdWithVersions() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver1", 1)
+        val blob2 = getMockedBlob("ver2", 2)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, FILE_ID, 1)))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "2", 2)))).thenReturn(blob2)
+
+        val fakePage1: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        val fakePage2: Page<Blob> = mock(Page::class.java) as Page<Blob>
+
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage1).thenReturn(fakePage2)
+        Mockito.`when`(fakePage1.iterateAll())
+                .thenReturn(listOf(blob1))
+        Mockito.`when`(fakePage2.iterateAll())
+                .thenReturn(listOf(blob2))
+        val map = FileIdMap.newBuilder()
+                .putAllPrevIds(mutableMapOf("2" to "1"))
+                .build()
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, PROJECT_ID + "-fileIdMap"))))
+                .thenReturn(null)
+                .thenReturn(getMockedBlobWithFileIdMap(map))
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+        addPatchToService(patch2, "2")
+        commit()
+        assertEquals(listOf(1L, 2L), getVersionsList("2"))
+    }
+
+    @Test
+    fun changeFileIdTwoChanges() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver1", 1)
+        val blob2 = getMockedBlob("ver2", 2)
+        val blob3 = getMockedBlob("ver3", 3)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, FILE_ID, 1)))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "2", 2)))).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "3", 3)))).thenReturn(blob3)
+
+        val fakePage1: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        val fakePage2: Page<Blob> = mock(Page::class.java) as Page<Blob>
+        val fakePage3: Page<Blob> = mock(Page::class.java) as Page<Blob>
+
+        Mockito.`when`(fakeStorage.list(eq(this.BUCKET_NAME),
+                any(Storage.BlobListOption::class.java), any(Storage.BlobListOption::class.java)))
+                .thenReturn(fakePage1).thenReturn(fakePage2).thenReturn(fakePage3)
+        Mockito.`when`(fakePage1.iterateAll())
+                .thenReturn(listOf(blob1))
+        Mockito.`when`(fakePage2.iterateAll())
+                .thenReturn(listOf(blob2))
+        Mockito.`when`(fakePage3.iterateAll())
+                .thenReturn(listOf(blob3))
+        val map = FileIdMap.newBuilder()
+                .putAllPrevIds(mutableMapOf("2" to "1", "3" to "2"))
+                .build()
+        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, PROJECT_ID + "-fileIdMap"))))
+                .thenReturn(null)
+                .thenReturn(getMockedBlobWithFileIdMap(map))
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        val patch3 = diffPatch(USER_ID, "ver2", "ver3", 3)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+        addPatchToService(patch2, "2")
+        commit()
+        changeFileId("3")
+        addPatchToService(patch3, "3")
+        commit()
+        assertEquals(listOf(1L, 2L, 3L), getVersionsList("3"))
+    }
+
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = FILE_ID, projectId: String = PROJECT_ID):
             Pair<StreamRecorder<GetVersionResponse>, GetVersionRequest> {
         val getVersionRecorder: StreamRecorder<GetVersionResponse> = StreamRecorder.create()
@@ -877,6 +958,12 @@ class CosmasGoogleCloudServiceTest {
     private fun getMockedBlobWithCemetery(cemetery: FileCemetery): Blob {
         val blob = mock(Blob::class.java)
         Mockito.`when`(blob.getContent()).thenReturn(cemetery.toByteArray())
+        return blob
+    }
+
+    private fun getMockedBlobWithFileIdMap(fileIdMap: FileIdMap): Blob {
+        val blob = mock(Blob::class.java)
+        Mockito.`when`(blob.getContent()).thenReturn(fileIdMap.toByteArray())
         return blob
     }
 
