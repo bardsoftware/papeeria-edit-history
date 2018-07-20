@@ -693,6 +693,34 @@ class CosmasGoogleCloudServiceTest {
         return getVersionRecorder.values[0].file.content.toStringUtf8()
     }
 
+    @Test
+    fun changeFileIdSimple() {
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+        val patch2 = diffPatch(USER_ID, "kek", "lol", 1)
+        addPatchToService(patch2, "2")
+        commit()
+        assertEquals("kek", getFileFromService(1))
+        assertEquals("lol", getFileFromService(1, "2"))
+    }
+
+    @Test
+    fun changeFileIdWithPatch() {
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        val patch2 = diffPatch(USER_ID, "kek", "ch", 1)
+        addPatchToService(patch1)
+        commit()
+        addPatchToService(patch2)
+        changeFileId("2")
+        val patch3 = diffPatch(USER_ID, "ch", "lol", 1)
+        addPatchToService(patch3, "2")
+        commit()
+        assertEquals("kek", getFileFromService(1))
+        assertEquals("lol", getFileFromService(1, "2"))
+    }
+
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = FILE_ID, projectId: String = PROJECT_ID):
             Pair<StreamRecorder<GetVersionResponse>, GetVersionRequest> {
         val getVersionRecorder: StreamRecorder<GetVersionResponse> = StreamRecorder.create()
@@ -821,7 +849,7 @@ class CosmasGoogleCloudServiceTest {
         return deletedFileListRecorder
     }
 
-    private fun restoreDeletedFile(projectId: String = PROJECT_ID, fileId: String = FILE_ID): StreamRecorder<RestoreDeletedFileResponse> {
+    private fun restoreDeletedFile(fileId: String = FILE_ID, projectId: String = PROJECT_ID): StreamRecorder<RestoreDeletedFileResponse> {
         val recorder: StreamRecorder<RestoreDeletedFileResponse> = StreamRecorder.create()
         val request = RestoreDeletedFileRequest
                 .newBuilder()
@@ -829,6 +857,20 @@ class CosmasGoogleCloudServiceTest {
                 .setFileId(fileId)
                 .build()
         this.service.restoreDeletedFile(request, recorder)
+        return recorder
+    }
+
+    private fun changeFileId(newFileId: String, oldFileId: String = FILE_ID, projectId: String = PROJECT_ID): StreamRecorder<ChangeFileIdResponse> {
+        val recorder: StreamRecorder<ChangeFileIdResponse> = StreamRecorder.create()
+        val change = ChangeId.newBuilder()
+                .setNewFileId(newFileId)
+                .setOldFileId(oldFileId)
+                .build()
+        val request = ChangeFileIdRequest.newBuilder()
+                .setProjectId(projectId)
+                .addChanges(change)
+                .build()
+        this.service.changeFileId(request, recorder)
         return recorder
     }
 
@@ -860,8 +902,8 @@ class CosmasGoogleCloudServiceTest {
                 .build()
     }
 
-    private fun forcedCommit(content: String, timestamp: Long, projectId: String = PROJECT_ID,
-                             fileId: String = FILE_ID) {
+    private fun forcedCommit(content: String, timestamp: Long,
+                             fileId: String = FILE_ID, projectId: String = PROJECT_ID) {
         val recorder: StreamRecorder<ForcedFileCommitResponse> = StreamRecorder.create()
         val request = ForcedFileCommitRequest.newBuilder()
                 .setProjectId(projectId)

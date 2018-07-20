@@ -191,19 +191,30 @@ class CosmasGoogleCloudService(private val bucketName: String,
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
         LOG.info("Get request for list of versions file # ${request.fileId}")
-        val response = CosmasProto.FileVersionListResponse.newBuilder()
-        val blobs: Page<Blob> = try {
-            this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
-                    Storage.BlobListOption.prefix(request.fileId))
+        val prevIds = try {
+            getPrevIds(request.projectId)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
         }
-        blobs.iterateAll().forEach {
-            val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
-                    .setGeneration(it.generation)
-                    .setTimestamp(it.createTime)
-            response.addVersions(versionInfo.build())
+        val response = CosmasProto.FileVersionListResponse.newBuilder()
+        var curFileId = request.fileId
+        while (curFileId != null) {
+            val blobs: Page<Blob> = try {
+                this.storage.list(this.bucketName, Storage.BlobListOption.versions(true),
+                        Storage.BlobListOption.prefix(curFileId))
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
+            }
+            blobs.iterateAll().forEach {
+                val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
+                        .setGeneration(it.generation)
+                        .setTimestamp(it.createTime)
+                        .setActualFileId(curFileId)
+                response.addVersions(versionInfo.build())
+            }
+            curFileId = prevIds[curFileId]
         }
         if (response.versionsList.isEmpty()) {
             val status = Status.INVALID_ARGUMENT.withDescription(
@@ -415,14 +426,57 @@ class CosmasGoogleCloudService(private val bucketName: String,
             handleStorageException(e, responseObserver)
             return
         }
-        val response = CosmasProto.RestoreDeletedFileResponse.newBuilder()
-        responseObserver.onNext(response.build())
+        val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    override fun changeFileId(request: CosmasProto.ChangeFileIdRequest, responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
+        LOG.info("Get request for change files ids in project # ${request.projectId}")
+        val prevIds = try {
+            getPrevIds(request.projectId)
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getValue(request.projectId)
+        }
+        for (change in request.changesList) {
+            prevIds[change.newFileId] = change.oldFileId
+            synchronized(project) {
+                if (project.contains(change.oldFileId)) {
+                    project[change.newFileId] = project[change.oldFileId]
+                    project.remove(change.oldFileId)
+                }
+            }
+        }
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(this.bucketName, "${request.projectId}-fileIdMap").build(),
+                    CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return
+        }
+        val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
+        responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
 
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
         responseObserver.onError(e)
+    }
+
+    private fun getPrevIds(projectId: String): MutableMap<String, String> {
+        val mapName = "${projectId}-fileIdMap"
+        val mapBytes: Blob? = this.storage.get(BlobId.of(this.bucketName, mapName))
+        return if (mapBytes == null) {
+            mutableMapOf()
+        } else {
+            CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
+        }
     }
 
     fun deleteFile(fileId: String) {
