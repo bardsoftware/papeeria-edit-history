@@ -161,7 +161,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         // if request.generation is -1, Cosmas will return the latest version of file
-        val generation = if (request.generation == -1L)  {
+        val generation = if (request.generation == -1L) {
             LOG.info("Get request for the latest version of file # ${request.fileId}")
             null // In GCS if generation is null it returns the latest version
         } else {
@@ -211,7 +211,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
                         .setGeneration(it.generation)
                         .setTimestamp(it.createTime)
-                        .setActualFileId(curFileId)
+                        .setFileId(curFileId)
                 response.addVersions(versionInfo.build())
             }
             curFileId = prevIds[curFileId]
@@ -442,27 +442,29 @@ class CosmasGoogleCloudService(private val bucketName: String,
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getValue(request.projectId)
         }
-        for (change in request.changesList) {
-            prevIds[change.newFileId] = change.oldFileId
-            synchronized(project) {
+        synchronized(project) {
+            for (change in request.changesList) {
+                prevIds[change.newFileId] = change.oldFileId
                 if (project.contains(change.oldFileId)) {
                     project[change.newFileId] = project[change.oldFileId]
                     project.remove(change.oldFileId)
                 }
+
             }
-        }
-        try {
-            this.storage.create(
-                    BlobInfo.newBuilder(this.bucketName, "${request.projectId}-fileIdMap").build(),
-                    CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return
+            try {
+                this.storage.create(
+                        BlobInfo.newBuilder(this.bucketName, "${request.projectId}-fileIdMap").build(),
+                        CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
+            }
         }
         val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
+
 
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened: ${e.message}")
