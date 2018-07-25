@@ -471,14 +471,10 @@ class CosmasGoogleCloudService(private val bucketName: String,
         responseObserver.onError(e)
     }
 
-    private fun getPrevIds(projectId: String): MutableMap<String, String> {
+    private fun getPrevIds(projectId: String): Map<String, String> {
         val mapName = "${projectId}-fileIdMap"
-        val mapBytes: Blob? = this.storage.get(BlobId.of(this.bucketName, mapName))
-        return if (mapBytes == null) {
-            mutableMapOf()
-        } else {
-            CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
-        }
+        val mapBytes: Blob = this.storage.get(BlobId.of(this.bucketName, mapName)) ?: return mapOf()
+        return CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     fun deleteFile(fileId: String) {
