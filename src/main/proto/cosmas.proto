@@ -21,6 +21,7 @@ option java_outer_classname = "CosmasProto";
 message FileVersionInfo {
     int64 generation = 1;
     int64 timestamp = 2;
+    string fileId = 3;
 }
 
 message FileInfo {
@@ -43,6 +44,15 @@ message Patch {
     string text = 2;
     int64 timestamp = 3;
     string actualHash = 4;
+}
+
+message ChangeId {
+    string oldFileId = 1;
+    string newFileId = 2;
+}
+
+message FileIdMap {
+    map<string, string> prevIds = 1;
 }
 
 message GetVersionRequest {
@@ -142,9 +152,16 @@ message RestoreDeletedFileRequest {
     string fileId = 2;
 }
 
-message RestoreDeletedFileResponse{
+message RestoreDeletedFileResponse {
 }
 
+message ChangeFileIdRequest {
+    string projectId = 1;
+    repeated ChangeId changes = 2;
+}
+
+message ChangeFileIdResponse {
+}
 
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
@@ -165,6 +182,8 @@ service Cosmas {
     }
     rpc ForcedFileCommit (ForcedFileCommitRequest) returns (ForcedFileCommitResponse) {
     }
-    rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse){
+    rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
+    }
+    rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
     }
 }
