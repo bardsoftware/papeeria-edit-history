@@ -14,6 +14,7 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.google.common.base.Preconditions
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
@@ -31,6 +32,8 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 
     constructor(port: Int, service: CosmasGrpc.CosmasImplBase,
                 certChain: File, privateKey: File) : this(port, service) {
+        Preconditions.checkState(certChain.exists(), "File with SSL certificate doesn't exists")
+        Preconditions.checkState(privateKey.exists(), "File with SSL key doesn't exists")
         this.server = ServerBuilder
                 .forPort(port)
                 .useTransportSecurity(certChain, privateKey)
@@ -70,7 +73,7 @@ fun main(args: Array<String>) = mainBody {
     LOG.info("Try to bind in port ${arg.port}")
     val server =
             if (arg.bucket != "") {
-                if(arg.certChain != null && arg.privateKey != null) {
+                if (arg.certChain != null && arg.privateKey != null) {
                     CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket),
                             File(arg.certChain), File(arg.privateKey))
                 } else {
