@@ -14,12 +14,14 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.google.common.base.Preconditions
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import com.xenomachina.argparser.mainBody
 import org.slf4j.LoggerFactory
+import java.io.File
 
 /**
  * Simple server that will wait for request and will send response back.
@@ -27,10 +29,23 @@ import org.slf4j.LoggerFactory
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
-    private val server: Server = ServerBuilder
+
+    constructor(port: Int, service: CosmasGrpc.CosmasImplBase,
+                certChain: File, privateKey: File) : this(port, service) {
+        Preconditions.checkState(certChain.exists(), "File with SSL certificate doesn't exists")
+        Preconditions.checkState(privateKey.exists(), "File with SSL key doesn't exists")
+        this.server = ServerBuilder
+                .forPort(port)
+                .useTransportSecurity(certChain, privateKey)
+                .addService(service)
+                .build()
+    }
+
+    private var server: Server = ServerBuilder
             .forPort(port)
             .addService(service)
             .build()
+
 
     fun start() {
         this.server.start()
@@ -58,7 +73,12 @@ fun main(args: Array<String>) = mainBody {
     LOG.info("Try to bind in port ${arg.port}")
     val server =
             if (arg.bucket != "") {
-                CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
+                if (arg.certChain != null && arg.privateKey != null) {
+                    CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket),
+                            File(arg.certChain), File(arg.privateKey))
+                } else {
+                    CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
+                }
             } else {
                 CosmasServer(arg.port, CosmasInMemoryService())
             }
@@ -69,9 +89,11 @@ fun main(args: Array<String>) = mainBody {
 
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port",
-            help = "choose port that server will listen to, 50051 by default") { toInt() }.
-            default { 50051 }
+            help = "choose port that server will listen to, 50051 by default") { toInt() }.default { 50051 }
     val bucket: String by parser.storing("--bucket",
-            help = "choose Google Cloud bucket for files storing, \"papeeria-interns-cosmas\" by default").
-            default { "papeeria-interns-cosmas" }
+            help = "choose Google Cloud bucket for files storing, \"papeeria-interns-cosmas\" by default").default { "papeeria-interns-cosmas" }
+    val certChain: String? by parser.storing("--cert",
+            help = "choose path to SSL cert").default { null }
+    val privateKey: String? by parser.storing("--key",
+            help = "choose path to SSL key").default { null }
 }
