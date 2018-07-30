@@ -42,7 +42,6 @@ class CosmasClient(host: String, port: Int) {
         addText()
         val request: GetVersionRequest = GetVersionRequest.newBuilder()
                 .setGeneration(version)
-                .setProjectId("0")
                 .setFileId("43")
                 .build()
         val response: GetVersionResponse = this.blockingStub.getVersion(request)
@@ -51,7 +50,6 @@ class CosmasClient(host: String, port: Int) {
 
     private fun addText() {
         val request = CreateVersionRequest.newBuilder()
-                .setProjectId("0")
                 .setFileId("43")
                 .setFile(ByteString.copyFromUtf8("ver0"))
                 .build()

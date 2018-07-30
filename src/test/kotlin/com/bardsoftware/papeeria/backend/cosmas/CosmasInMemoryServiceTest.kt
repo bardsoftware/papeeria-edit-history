@@ -133,7 +133,6 @@ class CosmasInMemoryServiceTest {
                 .newBuilder()
                 .setGeneration(version)
                 .setFileId(fileId)
-                .setProjectId(projectId)
                 .build()
         this.service.getVersion(getVersionRequest, getVersionRecorder)
         return getVersionRecorder
@@ -144,7 +143,6 @@ class CosmasInMemoryServiceTest {
         val newVersionRequest = CosmasProto.CreateVersionRequest
                 .newBuilder()
                 .setFileId(fileId)
-                .setProjectId(projectId)
                 .setFile(ByteString.copyFromUtf8(text))
                 .build()
         this.service.createVersion(newVersionRequest, createVersionRecorder)
@@ -219,7 +217,6 @@ class CosmasInMemoryServiceTest {
         val newVersionRequest = CosmasProto.FileVersionListRequest
                 .newBuilder()
                 .setFileId(fileId)
-                .setProjectId(projectId)
                 .build()
         this.service.fileVersionList(newVersionRequest, listOfFileVersionsRecorder)
         return listOfFileVersionsRecorder
