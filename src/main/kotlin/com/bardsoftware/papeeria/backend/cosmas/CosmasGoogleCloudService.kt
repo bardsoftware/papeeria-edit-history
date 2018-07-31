@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
+import com.google.common.base.Ticker
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
 
@@ -37,9 +38,18 @@ private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class CosmasGoogleCloudService(private val freeBucketName: String, private val paidBucketName: String,
-                               private val storage: Storage = StorageOptions.getDefaultInstance().service) : CosmasGrpc.CosmasImplBase() {
+                               private val storage: Storage = StorageOptions.getDefaultInstance().service,
+                               private val ticker: Ticker = Ticker.systemTicker())
+    : CosmasGrpc.CosmasImplBase() {
 
-    private val fileBuffer = ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>().withDefault { ConcurrentHashMap() }
+    constructor(bucketName: String, storage: Storage = StorageOptions.getDefaultInstance().service,
+                ticker: Ticker = Ticker.systemTicker())
+            : this(bucketName, bucketName, storage, ticker)
+
+
+    private val fileBuffer =
+            ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
+                    .withDefault { ConcurrentHashMap() }
 
     companion object {
         fun md5Hash(text: String): String {
@@ -60,9 +70,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
     fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
         return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
     }
-
-    constructor(bucketName: String, storage: Storage = StorageOptions.getDefaultInstance().service)
-            : this(bucketName, bucketName, storage)
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
@@ -85,7 +92,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        LOG.info("Get request for create new patch of file # ${request.fileId} by user ${request.patchesList[0].userId}")
+        LOG.info("Get request for create new patch of file # ${request.fileId} " +
+                "by user ${request.patchesList[0].userId}")
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.info.projectId)
             val fileVersion = project[request.fileId]
@@ -108,7 +116,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
     }
 
 
-    override fun commitVersion(request: CosmasProto.CommitVersionRequest, responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
+    override fun commitVersion(request: CosmasProto.CommitVersionRequest,
+                               responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
         LOG.info("Get request for commit last version of files in project # ${request.info.projectId}")
         val project = this.fileBuffer[request.info.projectId]
         if (project == null) {
@@ -134,6 +143,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                     if (patches.isEmpty() || patches.last().actualHash == cosmasHash) {
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
+                                .setTimestamp(ticker.read())
+                        println(newVersion.build())
                         this.storage.create(getBlobInfo(fileId, request.info),
                                 newVersion.build().toByteArray())
                         project[fileId] = newVersion
@@ -217,15 +228,16 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
         while (curFileId != null) {
             val blobs: Page<Blob> = try {
                 this.storage.list(bucketName(request.info.isFreePlan), Storage.BlobListOption.versions(true),
-                        Storage.BlobListOption.prefix(curFileId))
+                        Storage.BlobListOption.prefix(fileStorageName(curFileId, request.info)))
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return
             }
             blobs.iterateAll().forEach {
+                val fileVersion = FileVersion.parseFrom(it.getContent())
                 val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
                         .setGeneration(it.generation)
-                        .setTimestamp(it.createTime)
+                        .setTimestamp(fileVersion.timestamp)
                         .setFileId(curFileId)
                 response.addVersions(versionInfo.build())
             }
@@ -254,10 +266,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
         var closestTimestamp = -1L
         var previousText = ""
         blobs.iterateAll().forEach {
-            if (it.createTime >= timestamp) {
+            val fileVersion = FileVersion.parseFrom(it.getContent())
+            if (fileVersion.timestamp >= timestamp) {
                 patchList.addAll(CosmasProto.FileVersion.parseFrom(it.getContent()).patchesList)
-            } else if (it.createTime > closestTimestamp) {
-                closestTimestamp = it.createTime
+            } else if (fileVersion.timestamp > closestTimestamp) {
+                closestTimestamp = fileVersion.timestamp
                 previousText = CosmasProto.FileVersion.parseFrom(it.getContent()).content.toStringUtf8()
             }
         }
@@ -269,7 +282,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
     override fun deletePatch(request: CosmasProto.DeletePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
         // Timestamp of file version witch contains patch
-        val versionTimestamp = this.storage.get(getBlobId(request.fileId, request.info, request.generation)).createTime
+        val versionTimestamp = FileVersion.parseFrom(
+                this.storage.get(getBlobId(request.fileId, request.info, request.generation)).getContent()).timestamp
         // Text of version from which patch was applied (version before version witch contains patch)
         val (patchList, text) = try {
             getPatchListAndPreviousText(request.fileId, versionTimestamp, request.info)
@@ -292,7 +306,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
         }
         val textWithoutPatch: String
         try {
-            val textBeforeCandidateDelete = PatchCorrector.applyPatch(patchList.subList(0, indexCandidateDeletePatch), text)
+            val textBeforeCandidateDelete = PatchCorrector.applyPatch(
+                    patchList.subList(0, indexCandidateDeletePatch), text)
             val finishText = CosmasProto.FileVersion.parseFrom(
                     this.storage.get(getBlobId(request.fileId, request.info)).getContent()).content.toStringUtf8()
             textWithoutPatch = PatchCorrector.applyPatch(
@@ -447,7 +462,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
         responseObserver.onCompleted()
     }
 
-    override fun changeFileId(request: CosmasProto.ChangeFileIdRequest, responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
+    override fun changeFileId(request: CosmasProto.ChangeFileIdRequest,
+                              responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project # ${request.info.projectId}")
         val prevIds = try {
             getPrevIds(request.info.projectId, request.info).toMutableMap()

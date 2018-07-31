@@ -49,6 +49,7 @@ message FileCemetery {
 message FileVersion {
     repeated Patch patches = 1;
     bytes content = 2;
+    int64 timestamp = 3;
 }
 
 message Patch {
