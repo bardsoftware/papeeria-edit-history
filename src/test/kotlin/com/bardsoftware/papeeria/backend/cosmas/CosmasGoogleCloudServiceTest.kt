@@ -21,11 +21,14 @@ import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
 import com.google.protobuf.ByteString
+import io.grpc.Status
+import io.grpc.StatusException
 import io.grpc.internal.testing.StreamRecorder
 import name.fraser.neil.plaintext.diff_match_patch
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.mockito.Matchers
 import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
 import org.mockito.Mockito
@@ -233,6 +236,21 @@ class CosmasGoogleCloudServiceTest {
         this.service.getVersion(getVersionRequest, getVersionRecorder)
         assertNotNull(getVersionRecorder.error)
         assertEquals("kek lol", file)
+    }
+
+    @Test
+    fun twoFilesWithDifferentPlan() {
+        service = getServiceForTestsWithPlans()
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        val patch2 = diffPatch(USER_ID, "kek", "lol", 2)
+        addPatchToService(patch1, "1", projectInfo(PROJECT_ID, USER_ID, false))
+        addPatchToService(patch2, "2", projectInfo(PROJECT_ID, USER_ID, true))
+        commit(projectInfo(PROJECT_ID, USER_ID, false))
+        commit(projectInfo(PROJECT_ID, USER_ID, true))
+        val file1 = getFileFromService(0, "1", projectInfo(PROJECT_ID, USER_ID, false))
+        val file2 = getFileFromService(0, "2", projectInfo(PROJECT_ID, USER_ID, true))
+        assertEquals("kek", file1)
+        assertEquals("lol", file2)
     }
 
     @Test
@@ -655,7 +673,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun deleteFilePaid() {
+    fun deleteFilePlan() {
         val fakeStorage = mock(Storage::class.java)
         val time = 1L
         val cemeteryName = "$PROJECT_ID-cemetery"
@@ -670,6 +688,28 @@ class CosmasGoogleCloudServiceTest {
                 .build()
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo(PROJECT_ID, USER_ID, false))),
                 eq(FileCemetery.newBuilder().addCemetery(newTomb).build().toByteArray()))
+    }
+
+    @Test
+    fun deletedFileListPlan() {
+        val tomb1 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("1")
+                .setFileName("file1")
+                .setRemovalTimestamp(1)
+                .build()
+
+        val tomb2 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("2")
+                .setFileName("file2")
+                .setRemovalTimestamp(2)
+                .build()
+        service = getServiceForTestsWithPlans()
+        deleteFile("1", "file1", 1, projectInfo(PROJECT_ID, USER_ID, true))
+        deleteFile("2", "file2", 2, projectInfo(PROJECT_ID, USER_ID, false))
+        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb1).build(),
+                deletedFileList(projectInfo(PROJECT_ID, USER_ID, true)).values[0])
+        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb2).build(),
+                deletedFileList(projectInfo(PROJECT_ID, USER_ID, false)).values[0])
     }
 
     @Test
@@ -711,6 +751,24 @@ class CosmasGoogleCloudServiceTest {
         Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
                 eq(emptyCemetery.toByteArray()))
+    }
+
+    @Test
+    fun restoreDeletedFilePlan() {
+        val tomb2 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("2")
+                .setFileName("file2")
+                .setRemovalTimestamp(2)
+                .build()
+        service = getServiceForTestsWithPlans()
+        deleteFile("1", "file1", 1, projectInfo(PROJECT_ID, USER_ID, true))
+        deleteFile("2", "file2", 2, projectInfo(PROJECT_ID, USER_ID, false))
+        restoreDeletedFile("1", projectInfo(PROJECT_ID, USER_ID, true))
+
+        assertEquals(DeletedFileListResponse.getDefaultInstance(),
+                deletedFileList(projectInfo(PROJECT_ID, USER_ID, true)).values[0])
+        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb2).build(),
+                deletedFileList(projectInfo(PROJECT_ID, USER_ID, false)).values[0])
     }
 
     @Test
@@ -768,6 +826,7 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("kek", getFileFromService(1))
         assertEquals("lol", getFileFromService(1, "2"))
     }
+
 
     @Test
     fun changeFileIdWithPatch() {
@@ -863,6 +922,48 @@ class CosmasGoogleCloudServiceTest {
         addPatchToService(patch3, "3")
         commit()
         assertEquals(listOf(1L, 2L, 3L), getVersionsList("3"))
+    }
+
+    @Test
+    fun changeUserPlanTest() {
+        service = getServiceForTestsWithPlans()
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        val patch2 = diffPatch(USER_ID, "kek", "lol", 2)
+        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
+        commit(projectInfo(PROJECT_ID, USER_ID, false))
+        changePlan(true)
+        addPatchToService(patch2, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
+        commit(projectInfo(PROJECT_ID, USER_ID, true))
+        val file1 = getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
+        val file2 = getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
+        assertEquals("kek", file1)
+        assertEquals("lol", file2)
+    }
+
+    @Test
+    fun changeUserPlanTestDelete() {
+        service = getServiceForTestsWithPlans()
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
+        commit(projectInfo(PROJECT_ID, USER_ID, false))
+        deleteFile(FILE_ID, "file", 3, projectInfo(PROJECT_ID, USER_ID, false))
+        val recorder = changePlan(true)
+        assertNull(recorder.error)
+    }
+
+    @Test
+    fun changeUserPlanTestFailed() {
+        val runtime = mock(Runtime::class.java)
+        val process = mock(Process::class.java)
+        Mockito.`when`(runtime.exec(Matchers.anyString())).thenReturn(process)
+        Mockito.`when`(process.waitFor()).thenReturn(-1)
+        service = getServiceForTestsWithPlans()
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
+        commit(projectInfo(PROJECT_ID, USER_ID, false))
+        val recorder = changePlan(true, runtime)
+        assertNotNull(recorder.error)
+        assertEquals(Status.INTERNAL.code, (recorder.error as StatusException).status.code)
     }
 
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = FILE_ID,
@@ -1098,5 +1199,25 @@ class CosmasGoogleCloudServiceTest {
                 .setOwnerId(ownerId)
                 .setIsFreePlan(isFreePlan)
                 .build()
+    }
+
+    fun changePlan(toFree: Boolean, runtime: Runtime = getMockedRuntime(), userId: String = USER_ID):
+            StreamRecorder<ChangeUserPlanResponse> {
+        val recorder: StreamRecorder<ChangeUserPlanResponse> = StreamRecorder.create()
+        val request = ChangeUserPlanRequest.newBuilder()
+                .setIsFreePlanNow(toFree)
+                .setUserId(userId)
+                .build()
+        this.service.changeUserPlan(request, recorder, runtime)
+        return recorder
+    }
+
+
+    fun getMockedRuntime(): Runtime {
+        val runtime = mock(Runtime::class.java)
+        val process = mock(Process::class.java)
+        Mockito.`when`(process.waitFor()).thenReturn(0)
+        Mockito.`when`(runtime.exec(Matchers.anyString())).thenReturn(process)
+        return runtime
     }
 }

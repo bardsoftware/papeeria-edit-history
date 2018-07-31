@@ -170,6 +170,15 @@ message ChangeFileIdRequest {
 message ChangeFileIdResponse {
 }
 
+message ChangeUserPlanRequest {
+    string userId = 1;
+    bool isFreePlanNow = 2; // plan AFTER changing
+}
+
+message ChangeUserPlanResponse {
+
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -192,5 +201,7 @@ service Cosmas {
     rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
     }
     rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
+    }
+    rpc ChangeUserPlan (ChangeUserPlanRequest) returns (ChangeUserPlanResponse) {
     }
 }
