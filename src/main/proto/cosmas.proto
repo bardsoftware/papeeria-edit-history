@@ -18,6 +18,13 @@ syntax = "proto3";
 option java_package = "com.bardsoftware.papeeria.backend.cosmas";
 option java_outer_classname = "CosmasProto";
 
+
+message ProjectInfo {
+    string projectId = 1;
+    string ownerId = 2;
+    bool isFreePlan = 3;
+}
+
 message FileVersionInfo {
     int64 generation = 1;
     int64 timestamp = 2;
@@ -39,6 +46,12 @@ message FileCemetery {
     repeated FileTomb cemetery = 1;
 }
 
+message FileVersion {
+    repeated Patch patches = 1;
+    bytes content = 2;
+    int64 timestamp = 3;
+}
+
 message Patch {
     string userId = 1;
     string text = 2;
@@ -56,7 +69,7 @@ message FileIdMap {
 }
 
 message GetVersionRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     int64 generation = 3; // if generation is -1, Cosmas will return the latest version of file
 }
@@ -66,7 +79,7 @@ message GetVersionResponse {
 }
 
 message CreateVersionRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     bytes file = 3;
 }
@@ -76,7 +89,7 @@ message CreateVersionResponse {
 
 
 message CreatePatchRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     repeated Patch patches = 3;
 }
@@ -85,7 +98,7 @@ message CreatePatchResponse {
 }
 
 message FileVersionListRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
 }
 
@@ -95,20 +108,15 @@ message FileVersionListResponse {
 }
 
 message CommitVersionRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
 }
 
 message CommitVersionResponse {
     repeated FileInfo badFiles = 1;
 }
 
-message FileVersion {
-    repeated Patch patches = 1;
-    bytes content = 2;
-}
-
 message DeletePatchRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     int64 generation = 3;
     int64 patchTimestamp = 4;
@@ -119,7 +127,7 @@ message DeletePatchResponse {
 }
 
 message DeleteFileRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     string fileName = 3;
     int64 removalTimestamp = 4;
@@ -130,7 +138,7 @@ message DeleteFileResponse {
 }
 
 message DeletedFileListRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
 }
 
 message DeletedFileListResponse {
@@ -138,7 +146,7 @@ message DeletedFileListResponse {
 }
 
 message ForcedFileCommitRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
     int64 timestamp = 3;
     bytes actualContent = 4;
@@ -148,7 +156,7 @@ message ForcedFileCommitResponse {
 }
 
 message RestoreDeletedFileRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     string fileId = 2;
 }
 
@@ -156,11 +164,20 @@ message RestoreDeletedFileResponse {
 }
 
 message ChangeFileIdRequest {
-    string projectId = 1;
+    ProjectInfo info = 1;
     repeated ChangeId changes = 2;
 }
 
 message ChangeFileIdResponse {
+}
+
+message ChangeUserPlanRequest {
+    string userId = 1;
+    bool isFreePlanNow = 2; // plan AFTER changing
+}
+
+message ChangeUserPlanResponse {
+
 }
 
 service Cosmas {
@@ -185,5 +202,7 @@ service Cosmas {
     rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
     }
     rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
+    }
+    rpc ChangeUserPlan (ChangeUserPlanRequest) returns (ChangeUserPlanResponse) {
     }
 }

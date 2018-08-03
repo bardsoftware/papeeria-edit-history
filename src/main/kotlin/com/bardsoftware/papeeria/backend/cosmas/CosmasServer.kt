@@ -23,6 +23,8 @@ import com.xenomachina.argparser.mainBody
 import org.slf4j.LoggerFactory
 import java.io.File
 
+private val LOG = LoggerFactory.getLogger("CosmasServer")
+
 /**
  * Simple server that will wait for request and will send response back.
  * It uses CosmasGoogleCloudService or CosmasInMemoryService to store files
@@ -40,6 +42,7 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
                 .addService(service)
                 .build()
     }
+
 
     private var server: Server = ServerBuilder
             .forPort(port)
@@ -71,17 +74,30 @@ fun main(args: Array<String>) = mainBody {
     val parser = ArgParser(args)
     val arg = CosmasServerArgs(parser)
     LOG.info("Try to bind in port ${arg.port}")
+    val freeBucket = arg.freeBucket
+    val paidBucket = arg.paidBucket
+    val gsutilImageName = arg.gsutilImageName
     val server =
-            if (arg.bucket != "") {
+            if (freeBucket != null && paidBucket != null) {
+                LOG.info("Starting Cosmas in secure mode(using SSL)")
                 if (arg.certChain != null && arg.privateKey != null) {
-                    CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket),
-                            File(arg.certChain), File(arg.privateKey))
+
+                    CosmasServer(arg.port,
+                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
+                            File(arg.certChain),
+                            File(arg.privateKey))
                 } else {
-                    CosmasServer(arg.port, CosmasGoogleCloudService(arg.bucket))
+                    LOG.info("Starting Cosmas in non-secure mode")
+                    CosmasServer(arg.port,
+                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
                 }
             } else {
+                LOG.info("""Starting in-memory Cosmas implementation
+                           |Please cpecify --free-bucket and --paid-bucket arguments to run GCS implementation"""
+                        .trimMargin())
                 CosmasServer(arg.port, CosmasInMemoryService())
             }
+
     LOG.info("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
@@ -90,10 +106,14 @@ fun main(args: Array<String>) = mainBody {
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port",
             help = "choose port that server will listen to, 50051 by default") { toInt() }.default { 50051 }
-    val bucket: String by parser.storing("--bucket",
-            help = "choose Google Cloud bucket for files storing, \"papeeria-interns-cosmas\" by default").default { "papeeria-interns-cosmas" }
     val certChain: String? by parser.storing("--cert",
             help = "choose path to SSL cert").default { null }
     val privateKey: String? by parser.storing("--key",
             help = "choose path to SSL key").default { null }
+    val freeBucket: String? by parser.storing("--free-bucket",
+            help = "choose bucket for users with free plan").default { null }
+    val paidBucket: String? by parser.storing("--paid-bucket",
+            help = "choose bucket for users with paid plan").default { null }
+    val gsutilImageName: String by parser.storing("--gsutil-image",
+            help = "choose docker image with gsutil").default { "" }
 }
