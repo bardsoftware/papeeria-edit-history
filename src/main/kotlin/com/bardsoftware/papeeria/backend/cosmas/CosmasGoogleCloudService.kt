@@ -37,19 +37,24 @@ private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
  *
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasGoogleCloudService(private val freeBucketName: String, private val paidBucketName: String,
+class CosmasGoogleCloudService(private val freeBucketName: String,
+                               private val paidBucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service,
-                               private val ticker: Ticker = Ticker.systemTicker())
-    : CosmasGrpc.CosmasImplBase() {
+                               private val ticker: Ticker = Ticker.systemTicker(),
+                               gsutilImageName: String = "") : CosmasGrpc.CosmasImplBase() {
 
-    constructor(bucketName: String, storage: Storage = StorageOptions.getDefaultInstance().service,
-                ticker: Ticker = Ticker.systemTicker())
-            : this(bucketName, bucketName, storage, ticker)
+    constructor(bucketName: String,
+                storage: Storage = StorageOptions.getDefaultInstance().service,
+                ticker: Ticker = Ticker.systemTicker(),
+                gsutilImageName: String = "")
+            : this(bucketName, bucketName, storage, ticker, gsutilImageName)
 
 
     private val fileBuffer =
             ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
                     .withDefault { ConcurrentHashMap() }
+
+    private val gsutilCommand = if (gsutilImageName != "") "docker run ${gsutilImageName} gsutil" else "gsutil"
 
     companion object {
         fun md5Hash(text: String): String {
@@ -73,7 +78,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun createVersion(request: CosmasProto.CreateVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        LOG.info("Get request for create new version of file # ${request.fileId}")
+        LOG.info("Get request for create new version of file={}", request.fileId)
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.info.projectId)
             val patchList = project[request.fileId]?.patchesList ?: mutableListOf()
@@ -92,8 +97,15 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
-        LOG.info("Get request for create new patch of file # ${request.fileId} " +
-                "by user ${request.patchesList[0].userId}")
+        if (request.patchesList.isEmpty()) {
+            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
+                    "Patches list at request is empty")
+            LOG.error(errorStatus.description)
+            responseObserver.onError(StatusException(errorStatus))
+            return
+        }
+        val userId = request.patchesList.first().userId
+        LOG.info("Get request for create new patch of file={} by user={}", request.fileId, userId)
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.info.projectId)
             val fileVersion = project[request.fileId]
@@ -118,7 +130,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun commitVersion(request: CosmasProto.CommitVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) {
-        LOG.info("Get request for commit last version of files in project # ${request.info.projectId}")
+        LOG.info("Get request for commit last version of files in project={}", request.info.projectId)
         val project = this.fileBuffer[request.info.projectId]
         if (project == null) {
             val errorStatus = Status.INVALID_ARGUMENT.withDescription(
@@ -144,7 +156,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
                                 .setTimestamp(ticker.read())
-                        println(newVersion.build())
                         this.storage.create(getBlobInfo(fileId, request.info),
                                 newVersion.build().toByteArray())
                         project[fileId] = newVersion
@@ -152,8 +163,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                                 .build()
                     } else {
                         val actualHash = patches.last().actualHash
-                        LOG.error("Commit failure: " +
-                                "File # $fileId has Cosmas hash=$cosmasHash, but last actual hash=$actualHash")
+                        LOG.error("Commit failure: File={} has Cosmas hash={}, but last actual hash={}",
+                                fileId, cosmasHash, actualHash)
                         val badFile = CosmasProto.FileInfo.newBuilder()
                                 .setFileId(fileId)
                                 .setProjectId(request.info.projectId)
@@ -161,7 +172,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                         response.addBadFiles(badFile)
                     }
                 } catch (e: Throwable) {
-                    LOG.error("Error while applying patches to file # $fileId")
+                    LOG.error("Error while applying patches to file={}", fileId)
                     when (e) {
                         is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
                             val badFile = CosmasProto.FileInfo.newBuilder()
@@ -188,10 +199,10 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         // if request.generation is -1, Cosmas will return the latest version of file
         val generation = if (request.generation == -1L) {
-            LOG.info("Get request for the latest version of file # ${request.fileId}")
+            LOG.info("Get request for the latest version of file={}", request.fileId)
             null // In GCS if generation is null it returns the latest version
         } else {
-            LOG.info("Get request for generation ${request.generation} of file # ${request.fileId}")
+            LOG.info("Get request for generation {} of file={}", request.generation, request.fileId)
             request.generation
         }
 
@@ -216,9 +227,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
-        LOG.info("Get request for list of versions file # ${request.fileId}")
+        LOG.info("Get request for list of versions file={}", request.fileId)
         val prevIds = try {
-            getPrevIds(request.info.projectId, request.info)
+            getPrevIds(request.info)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -318,7 +329,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                     finishText)
         } catch (e: PatchCorrector.ApplyPatchException) {
             val errorStatus = Status.INTERNAL.withDescription(e.message)
-            LOG.error("Can't apply patch: ${e.message}")
+                    .withDescription("Can't apply patch: ${e.message}")
+            LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
             return
         }
@@ -330,7 +342,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun deleteFile(request: CosmasProto.DeleteFileRequest,
                             responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) {
-        LOG.info("""Get request for delete file "${request.fileName}" # ${request.fileId}""")
+        LOG.info("""Get request for delete file={} with name "{}"""", request.fileId, request.fileName)
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -363,7 +375,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun deletedFileList(request: CosmasProto.DeletedFileListRequest,
                                  responseObserver: StreamObserver<CosmasProto.DeletedFileListResponse>) {
-        LOG.info("Get request for list deleted files in project # ${request.info.projectId}")
+        LOG.info("Get request for list deleted files in project={}", request.info.projectId)
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -384,7 +396,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) {
-        LOG.info("Get request for commit file # ${request.fileId} in force")
+        LOG.info("Get request for commit file={} in force", request.fileId)
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getValue(request.info.projectId)
         }
@@ -434,7 +446,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) {
-        LOG.info("Get request for restore deleted file # ${request.fileId}")
+        LOG.info("Get request for restore deleted file={}", request.fileId)
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -464,9 +476,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
     override fun changeFileId(request: CosmasProto.ChangeFileIdRequest,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
-        LOG.info("Get request for change files ids in project # ${request.info.projectId}")
+        LOG.info("Get request for change files ids in project={}", request.info.projectId)
         val prevIds = try {
-            getPrevIds(request.info.projectId, request.info).toMutableMap()
+            getPrevIds(request.info).toMutableMap()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -507,13 +519,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
                        runtime: Runtime) {
         val isFreePlanNow = request.isFreePlanNow // plan AFTER changing
         if (isFreePlanNow) {
-            LOG.info("Get request for change user # ${request.userId} plan from paid to free")
+            LOG.info("Get request for change user={} plan from paid to free", request.userId)
         } else {
-            LOG.info("Get request for change user # ${request.userId} plan from free to paid")
+            LOG.info("Get request for change user={} plan from free to paid", request.userId)
         }
         val oldBucketName = bucketName(!isFreePlanNow)
         val newBucketName = bucketName(isFreePlanNow)
-        val gsutilCopyCommand = "gsutil cp -r -A gs://$oldBucketName/${request.userId}/*" +
+        val gsutilCopyCommand = "$gsutilCommand cp -r -A gs://$oldBucketName/${request.userId}/*" +
                 " gs://$newBucketName/${request.userId}"
         val copyProcess = runtime.exec(gsutilCopyCommand)
         val copyRes = copyProcess.waitFor()
@@ -524,7 +536,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
             responseObserver.onError(StatusException(errorStatus))
             return
         }
-        val gsutilRemoveCommand = "gsutil rm -r -a gs://$oldBucketName/${request.userId}"
+        val gsutilRemoveCommand = "$gsutilCommand rm -r -a gs://$oldBucketName/${request.userId}"
         val removeProcess = runtime.exec(gsutilRemoveCommand)
         val removeRes = removeProcess.waitFor()
         if (removeRes != 0) {
@@ -541,23 +553,23 @@ class CosmasGoogleCloudService(private val freeBucketName: String, private val p
 
 
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
-        LOG.error("StorageException happened: ${e.message}")
+        LOG.error("StorageException happened at Cosmas", e)
         responseObserver.onError(e)
     }
 
-    private fun getPrevIds(projectId: String, info: ProjectInfo): Map<String, String> {
-        val mapName = "${projectId}-fileIdMap"
+    private fun getPrevIds(info: ProjectInfo): Map<String, String> {
+        val mapName = "${info.projectId}-fileIdMap"
         val mapBytes: Blob = this.storage.get(getBlobId(mapName, info))
                 ?: return mapOf()
         return CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     fun deleteFile(fileId: String, info: ProjectInfo) {
-        LOG.info("Delete file # $fileId")
+        LOG.info("Delete file={}", fileId)
         try {
             this.storage.delete(getBlobId(fileId, info))
         } catch (e: StorageException) {
-            LOG.info("Deleting file failed: ${e.message}")
+            LOG.error("Deleting file failed at Cosmas", e)
         }
     }
 

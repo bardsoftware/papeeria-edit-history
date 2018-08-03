@@ -181,7 +181,6 @@ class CosmasGoogleCloudServiceTest {
         commit()
         assertEquals("ver2", getFileFromService(0))
         assertEquals("ver4", getFileFromService(1))
-        println(createFileVersion("ver2"))
         verify(fakeStorage).create(any(BlobInfo::class.java),
                 eq(createFileVersion("ver2").toByteArray()))
         verify(fakeStorage).create(any(BlobInfo::class.java),
@@ -1220,7 +1219,7 @@ class CosmasGoogleCloudServiceTest {
         return recorder
     }
 
-    fun getMockedTicker() : Ticker {
+    fun getMockedTicker(): Ticker {
         val ticker = mock(Ticker::class.java)
         Mockito.`when`(ticker.read()).thenReturn(0L)
         return ticker

@@ -42,7 +42,6 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
     }
 
 
-
     private var server: Server = ServerBuilder
             .forPort(port)
             .addService(service)
@@ -73,29 +72,24 @@ fun main(args: Array<String>) = mainBody {
     val parser = ArgParser(args)
     val arg = CosmasServerArgs(parser)
     LOG.info("Try to bind in port ${arg.port}")
-    val bucket = arg.bucket
     val freeBucket = arg.freeBucket
     val paidBucket = arg.paidBucket
+    val gsutilImageName = arg.gsutilImageName
     val server =
-            if (bucket != null) {
+            if (freeBucket != null && paidBucket != null) {
                 if (arg.certChain != null && arg.privateKey != null) {
-                    CosmasServer(arg.port, CosmasGoogleCloudService(bucket),
-                            File(arg.certChain), File(arg.privateKey))
+                    CosmasServer(arg.port,
+                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
+                            File(arg.certChain),
+                            File(arg.privateKey))
                 } else {
-                    CosmasServer(arg.port, CosmasGoogleCloudService(bucket))
+                    CosmasServer(arg.port,
+                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
                 }
             } else {
-                if (freeBucket != null && paidBucket != null) {
-                    if (arg.certChain != null && arg.privateKey != null) {
-                        CosmasServer(arg.port, CosmasGoogleCloudService(freeBucket, paidBucket),
-                                File(arg.certChain), File(arg.privateKey))
-                    } else {
-                        CosmasServer(arg.port, CosmasGoogleCloudService(freeBucket, paidBucket))
-                    }
-                } else {
-                    CosmasServer(arg.port, CosmasInMemoryService())
-                }
+                CosmasServer(arg.port, CosmasInMemoryService())
             }
+
     LOG.info("Start working in port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
@@ -104,8 +98,6 @@ fun main(args: Array<String>) = mainBody {
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port",
             help = "choose port that server will listen to, 50051 by default") { toInt() }.default { 50051 }
-    val bucket: String? by parser.storing("--bucket",
-            help = "choose Google Cloud bucket for files storing, \"papeeria-interns-cosmas\" by default").default { null }
     val certChain: String? by parser.storing("--cert",
             help = "choose path to SSL cert").default { null }
     val privateKey: String? by parser.storing("--key",
@@ -114,4 +106,6 @@ class CosmasServerArgs(parser: ArgParser) {
             help = "choose bucket for users with free plan").default { null }
     val paidBucket: String? by parser.storing("--paid-bucket",
             help = "choose bucket for users with paid plan").default { null }
+    val gsutilImageName: String by parser.storing("--gsutil-image",
+            help = "choose docker image with gsutil").default { "" }
 }
