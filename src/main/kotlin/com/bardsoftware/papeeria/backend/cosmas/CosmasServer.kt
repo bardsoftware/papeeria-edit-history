@@ -23,6 +23,8 @@ import com.xenomachina.argparser.mainBody
 import org.slf4j.LoggerFactory
 import java.io.File
 
+private val LOG = LoggerFactory.getLogger("CosmasServer")
+
 /**
  * Simple server that will wait for request and will send response back.
  * It uses CosmasGoogleCloudService or CosmasInMemoryService to store files
@@ -77,16 +79,22 @@ fun main(args: Array<String>) = mainBody {
     val gsutilImageName = arg.gsutilImageName
     val server =
             if (freeBucket != null && paidBucket != null) {
+                LOG.info("Starting Cosmas in secure mode(using SSL)")
                 if (arg.certChain != null && arg.privateKey != null) {
+
                     CosmasServer(arg.port,
                             CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
                             File(arg.certChain),
                             File(arg.privateKey))
                 } else {
+                    LOG.info("Starting Cosmas in non-secure mode")
                     CosmasServer(arg.port,
                             CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
                 }
             } else {
+                LOG.info("""Starting in-memory Cosmas implementation
+                           |Please cpecify --free-bucket and --paid-bucket arguments to run GCS implementation"""
+                        .trimMargin())
                 CosmasServer(arg.port, CosmasInMemoryService())
             }
 
