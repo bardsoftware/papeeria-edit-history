@@ -12,6 +12,8 @@ RUN wget -qO- https://get.docker.com/ | sh
 
 RUN sudo usermod -aG docker $(whoami)
 
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
+
 WORKDIR /${COSMAS_VERSION}/bin/
 
 ENTRYPOINT ./cosmas-server
