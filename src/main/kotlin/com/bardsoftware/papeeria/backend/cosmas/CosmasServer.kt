@@ -79,9 +79,8 @@ fun main(args: Array<String>) = mainBody {
     val gsutilImageName = arg.gsutilImageName
     val server =
             if (freeBucket != null && paidBucket != null) {
-                LOG.info("Starting Cosmas in secure mode(using SSL)")
                 if (arg.certChain != null && arg.privateKey != null) {
-
+                    LOG.info("Starting Cosmas in secure mode(using SSL)")
                     CosmasServer(arg.port,
                             CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
                             File(arg.certChain),
