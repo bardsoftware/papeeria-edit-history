@@ -28,6 +28,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.common.base.Ticker
+import java.text.SimpleDateFormat
+import java.time.Clock
+import java.util.*
+
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
 
@@ -40,14 +44,14 @@ private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
 class CosmasGoogleCloudService(private val freeBucketName: String,
                                private val paidBucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service,
-                               private val ticker: Ticker = Ticker.systemTicker(),
+                               private val clock: Clock = Clock.systemUTC(),
                                gsutilImageName: String = "") : CosmasGrpc.CosmasImplBase() {
 
     constructor(bucketName: String,
                 storage: Storage = StorageOptions.getDefaultInstance().service,
-                ticker: Ticker = Ticker.systemTicker(),
+                clock: Clock = Clock.systemUTC(),
                 gsutilImageName: String = "")
-            : this(bucketName, bucketName, storage, ticker, gsutilImageName)
+            : this(bucketName, bucketName, storage, clock, gsutilImageName)
 
 
     private val fileBuffer =
@@ -155,7 +159,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     if (patches.isEmpty() || patches.last().actualHash == cosmasHash) {
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
-                                .setTimestamp(ticker.read())
+                                .setTimestamp(clock.millis())
                         this.storage.create(getBlobInfo(fileId, request.info),
                                 newVersion.build().toByteArray())
                         project[fileId] = newVersion
@@ -255,7 +259,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             curFileId = prevIds[curFileId]
         }
         if (response.versionsList.isEmpty()) {
-            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
+            val errorStatus = Status.NOT_FOUND.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
             LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
@@ -419,9 +423,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 .setTimestamp(request.timestamp)
                 .setActualHash(md5Hash(actualVersion))
                 .build()
+
         val newVersion = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
                 .setContent(ByteString.copyFrom(actualVersion.toByteArray()))
+                .setTimestamp(clock.millis())
                 .build()
         try {
             this.storage.create(
