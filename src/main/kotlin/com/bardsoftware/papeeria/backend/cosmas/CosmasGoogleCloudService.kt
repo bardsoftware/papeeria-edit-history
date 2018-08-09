@@ -259,7 +259,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             curFileId = prevIds[curFileId]
         }
         if (response.versionsList.isEmpty()) {
-            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
+            val errorStatus = Status.NOT_FOUND.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
             LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
