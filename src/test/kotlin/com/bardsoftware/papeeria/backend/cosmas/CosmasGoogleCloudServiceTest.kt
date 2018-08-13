@@ -120,10 +120,12 @@ class CosmasGoogleCloudServiceTest {
         createVersion("ver2", "43")
         commit()
         assertEquals(listOf(1L, 2L), getVersionsList("43"))
+        val patch1 = diffPatch(COSMAS_ID, "", "ver1", 0L)
+        val patch2 = diffPatch(COSMAS_ID, "ver1", "ver2", 0L)
         verify(fakeStorage).create(service.getBlobInfo("43", projectInfo()),
-                createFileVersion("ver1").toByteArray())
+                createFileVersion("ver1").toBuilder().addPatches(patch1).build().toByteArray())
         verify(fakeStorage).create(service.getBlobInfo("43", projectInfo()),
-                createFileVersion("ver2").toByteArray())
+                createFileVersion("ver2").toBuilder().addPatches(patch2).build().toByteArray())
     }
 
     @Test
@@ -139,10 +141,12 @@ class CosmasGoogleCloudServiceTest {
         commit()
         assertEquals("ver1", getFileFromService(1444, "43"))
         assertEquals("ver2", getFileFromService(822, "43"))
+        val patch1 = diffPatch(COSMAS_ID, "", "ver1", 0L)
+        val patch2 = diffPatch(COSMAS_ID, "ver1", "ver2", 0L)
         verify(fakeStorage).create(eq(service.getBlobInfo("43", projectInfo())),
-                eq(createFileVersion("ver1").toByteArray()))
+                eq(createFileVersion("ver1").toBuilder().addPatches(patch1).build().toByteArray()))
         verify(fakeStorage).create(eq(service.getBlobInfo("43", projectInfo())),
-                eq(createFileVersion("ver2").toByteArray()))
+                eq(createFileVersion("ver2").toBuilder().addPatches(patch2).build().toByteArray()))
     }
 
     @Test
@@ -160,45 +164,25 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun addTwoVersionsAndOneCommit() {
-        createVersion("ver0")
-        createVersion("ver1")
-        commit()
-        assertEquals("ver1", getFileFromService(0))
-    }
-
-    @Test
-    fun makeTwoCommits() {
-        val fakeStorage: Storage = mock(Storage::class.java)
-        val blob1 = getMockedBlob("ver2", 0)
-        val blob2 = getMockedBlob("ver4", 1)
-        Mockito.`when`(fakeStorage.get(any(BlobId::class.java))).thenReturn(blob1).thenReturn(blob2)
-        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
-        createVersion("ver1")
-        createVersion("ver2")
-        commit()
-        createVersion("ver3")
-        createVersion("ver4")
-        commit()
-        assertEquals("ver2", getFileFromService(0))
-        assertEquals("ver4", getFileFromService(1))
-        verify(fakeStorage).create(any(BlobInfo::class.java),
-                eq(createFileVersion("ver2").toByteArray()))
-        verify(fakeStorage).create(any(BlobInfo::class.java),
-                eq(createFileVersion("ver4").toByteArray()))
-        verify(fakeStorage, never()).create(any(BlobInfo::class.java),
-                eq(createFileVersion("ver1").toByteArray()))
-        verify(fakeStorage, never()).create(any(BlobInfo::class.java),
-                eq(createFileVersion("ver3").toByteArray()))
-    }
-
-    @Test
     fun addTwoFilesFromOneProject() {
         createVersion("file0", "0")
         createVersion("file1", "1")
         commit()
         assertEquals("file0", getFileFromService(0, "0"))
         assertEquals("file1", getFileFromService(0, "1"))
+    }
+
+    @Test
+    fun uselessCommit() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(null)
+                .thenThrow(StorageException(1, "test failed!!!"))
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        createVersion("kek")
+        commit()
+        commit()
     }
 
     @Test
@@ -244,13 +228,13 @@ class CosmasGoogleCloudServiceTest {
     fun twoFilesWithDifferentPlan() {
         service = getServiceForTestsWithPlans()
         val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        val patch2 = diffPatch(USER_ID, "kek", "lol", 2)
+        val patch2 = diffPatch(USER_ID, "", "lol", 2)
         addPatchToService(patch1, "1", projectInfo(PROJECT_ID, USER_ID, false))
         addPatchToService(patch2, "2", projectInfo(PROJECT_ID, USER_ID, true))
         commit(projectInfo(PROJECT_ID, USER_ID, false))
         commit(projectInfo(PROJECT_ID, USER_ID, true))
         val file1 = getFileFromService(0, "1", projectInfo(PROJECT_ID, USER_ID, false))
-        val file2 = getFileFromService(0, "2", projectInfo(PROJECT_ID, USER_ID, true))
+        val file2 = getFileFromService(0, "2", projectInfo(PROJECT_ID, USER_ID, false))
         assertEquals("kek", file1)
         assertEquals("lol", file2)
     }
