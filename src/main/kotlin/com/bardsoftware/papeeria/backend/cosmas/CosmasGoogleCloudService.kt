@@ -152,6 +152,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     val text = fileVersion.content.toStringUtf8()
                     val patches = fileVersion.patchesList.toMutableList()
                     if (patches.isEmpty()) {
+                        LOG.info("File={} has no patches, no need to commit it", fileId)
                         continue
                     }
                     patches.sortBy { it.timestamp }
@@ -167,6 +168,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                         project[fileId] = newVersion
                                 .clearPatches()
                                 .build()
+                        LOG.info("File={} has been committed", fileId)
                     } else {
                         val actualHash = patches.last().actualHash
                         LOG.error("Commit failure: File={} has Cosmas hash={}, but last actual hash={}",
