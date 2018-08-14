@@ -77,24 +77,22 @@ fun main(args: Array<String>) = mainBody {
     val freeBucket = arg.freeBucket
     val paidBucket = arg.paidBucket
     val gsutilImageName = arg.gsutilImageName
+
+    if (freeBucket == null || paidBucket == null) {
+        LOG.error("Please cpecify --free-bucket and --paid-bucket arguments to run GCS Cosmas implementation")
+        return@mainBody
+    }
     val server =
-            if (freeBucket != null && paidBucket != null) {
-                if (arg.certChain != null && arg.privateKey != null) {
-                    LOG.info("Starting Cosmas in secure mode(using SSL)")
-                    CosmasServer(arg.port,
-                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
-                            File(arg.certChain),
-                            File(arg.privateKey))
-                } else {
-                    LOG.info("Starting Cosmas in non-secure mode")
-                    CosmasServer(arg.port,
-                            CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
-                }
+            if (arg.certChain != null && arg.privateKey != null) {
+                LOG.info("Starting Cosmas in secure mode(using SSL)")
+                CosmasServer(arg.port,
+                        CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
+                        File(arg.certChain),
+                        File(arg.privateKey))
             } else {
-                LOG.info("""Starting in-memory Cosmas implementation
-                           |Please cpecify --free-bucket and --paid-bucket arguments to run GCS implementation"""
-                        .trimMargin())
-                CosmasServer(arg.port, CosmasInMemoryService())
+                LOG.info("Starting Cosmas in non-secure mode")
+                CosmasServer(arg.port,
+                        CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
             }
 
     LOG.info("Start working in port ${arg.port}")

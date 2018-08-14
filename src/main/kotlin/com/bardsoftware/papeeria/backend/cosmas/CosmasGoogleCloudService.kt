@@ -27,10 +27,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
-import com.google.common.base.Ticker
-import java.text.SimpleDateFormat
 import java.time.Clock
-import java.util.*
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -78,25 +75,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
         return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
-    }
-
-    override fun createVersion(request: CosmasProto.CreateVersionRequest,
-                               responseObserver: StreamObserver<CosmasProto.CreateVersionResponse>) {
-        LOG.info("Get request for create new version of file={}", request.fileId)
-        synchronized(this.fileBuffer) {
-            val project = this.fileBuffer.getValue(request.info.projectId)
-            val newVersion = project[request.fileId]?.toBuilder() ?: CosmasProto.FileVersion.newBuilder()
-            val oldText = newVersion.content.toStringUtf8()
-            val newText = request.file.toStringUtf8()
-            newVersion.addPatches(getDiffPatch(oldText, newText, this.clock.millis()))
-            project[request.fileId] = newVersion.build()
-            this.fileBuffer[request.info.projectId] = project
-        }
-        val response = CosmasProto.CreateVersionResponse
-                .newBuilder()
-                .build()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
@@ -244,6 +222,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         var curFileId = request.fileId
+        val versionList = mutableListOf<CosmasProto.FileVersionInfo>()
         while (curFileId != null) {
             val blobs: Page<Blob> = try {
                 this.storage.list(bucketName(request.info.isFreePlan), Storage.BlobListOption.versions(true),
@@ -258,10 +237,12 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                         .setGeneration(it.generation)
                         .setTimestamp(fileVersion.timestamp)
                         .setFileId(curFileId)
-                response.addVersions(versionInfo.build())
+                versionList.add(versionInfo.build())
             }
             curFileId = prevIds[curFileId]
         }
+        versionList.sortBy { it.timestamp }
+        response.addAllVersions(versionList)
         if (response.versionsList.isEmpty()) {
             val errorStatus = Status.NOT_FOUND.withDescription(
                     "There is no file in storage with file id ${request.fileId}")
@@ -555,7 +536,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         responseObserver.onCompleted()
     }
 
-    private fun getDiffPatch(oldText: String, newText: String, timestamp: Long) : CosmasProto.Patch {
+    private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {
         val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(oldText, newText))
         return CosmasProto.Patch.newBuilder()
                 .setText(diffPatch)
