@@ -85,11 +85,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         LOG.info("Get request for create new version of file={}", request.fileId)
         synchronized(this.fileBuffer) {
             val project = this.fileBuffer.getValue(request.info.projectId)
-            val patchList = project[request.fileId]?.patchesList ?: mutableListOf()
-            project[request.fileId] = CosmasProto.FileVersion.newBuilder()
-                    .setContent(request.file)
-                    .addAllPatches(patchList)
-                    .build()
+            val newVersion = project[request.fileId]?.toBuilder() ?: CosmasProto.FileVersion.newBuilder()
+            val oldText = newVersion.content.toStringUtf8()
+            val newText = request.file.toStringUtf8()
+            newVersion.addPatches(getDiffPatch(oldText, newText, this.clock.millis()))
+            project[request.fileId] = newVersion.build()
             this.fileBuffer[request.info.projectId] = project
         }
         val response = CosmasProto.CreateVersionResponse
@@ -150,13 +150,16 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             for ((fileId, fileVersion) in project) {
                 try {
                     val text = fileVersion.content.toStringUtf8()
-                    val patches = mutableListOf<CosmasProto.Patch>()
-                    patches.addAll(fileVersion.patchesList)
+                    val patches = fileVersion.patchesList.toMutableList()
+                    if (patches.isEmpty()) {
+                        LOG.info("File={} has no patches, no need to commit it", fileId)
+                        continue
+                    }
                     patches.sortBy { it.timestamp }
 
                     val newText = PatchCorrector.applyPatch(patches, text)
                     val cosmasHash = md5Hash(newText)
-                    if (patches.isEmpty() || patches.last().actualHash == cosmasHash) {
+                    if (patches.last().actualHash == cosmasHash) {
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
                                 .setTimestamp(clock.millis())
@@ -165,6 +168,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                         project[fileId] = newVersion
                                 .clearPatches()
                                 .build()
+                        LOG.info("File={} has been committed", fileId)
                     } else {
                         val actualHash = patches.last().actualHash
                         LOG.error("Commit failure: File={} has Cosmas hash={}, but last actual hash={}",
@@ -416,13 +420,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         } else ""
 
         val actualVersion = request.actualContent.toStringUtf8()
-        val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(previousVersion, actualVersion))
-        val patch = CosmasProto.Patch.newBuilder()
-                .setText(diffPatch)
-                .setUserId(COSMAS_ID)
-                .setTimestamp(request.timestamp)
-                .setActualHash(md5Hash(actualVersion))
-                .build()
+        val patch = getDiffPatch(previousVersion, actualVersion, request.timestamp)
 
         val newVersion = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
@@ -555,6 +553,16 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val response = CosmasProto.ChangeUserPlanResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
+    }
+
+    private fun getDiffPatch(oldText: String, newText: String, timestamp: Long) : CosmasProto.Patch {
+        val diffPatch = diff_match_patch().patch_toText(diff_match_patch().patch_make(oldText, newText))
+        return CosmasProto.Patch.newBuilder()
+                .setText(diffPatch)
+                .setUserId(COSMAS_ID)
+                .setTimestamp(timestamp)
+                .setActualHash(md5Hash(newText))
+                .build()
     }
 
 
