@@ -80,15 +80,7 @@ task cosmasServer(type: CreateStartScripts) {
     classpath = jar.outputs.files + project.configurations.runtime
 }
 
-task cosmasClient(type: CreateStartScripts) {
-    mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasClientKt'
-    applicationName = 'cosmas-client'
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
-}
-
 applicationDistribution.into('bin') {
-    from(cosmasClient)
     from(cosmasServer)
     fileMode = 0755
 }

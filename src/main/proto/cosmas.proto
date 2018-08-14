@@ -78,15 +78,6 @@ message GetVersionResponse {
     FileVersion file = 1;
 }
 
-message CreateVersionRequest {
-    ProjectInfo info = 1;
-    string fileId = 2;
-    bytes file = 3;
-}
-
-message CreateVersionResponse {
-}
-
 
 message CreatePatchRequest {
     ProjectInfo info = 1;
@@ -182,8 +173,6 @@ message ChangeUserPlanResponse {
 
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
-    }
-    rpc CreateVersion (CreateVersionRequest) returns (CreateVersionResponse) {
     }
     rpc CreatePatch (CreatePatchRequest) returns (CreatePatchResponse) {
     }
