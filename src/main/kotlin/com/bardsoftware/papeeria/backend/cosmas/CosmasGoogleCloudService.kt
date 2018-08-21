@@ -254,11 +254,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         responseObserver.onCompleted()
     }
 
-    private fun getPatchListAndPreviousText(fileId: String, timestamp: Long,
+    private fun getPatchListAndPreviousText(fileName: String, timestamp: Long,
                                             info: ProjectInfo): Pair<List<CosmasProto.Patch>, String> {
         val blobs: Page<Blob> = try {
             this.storage.list(bucketName(info.isFreePlan), Storage.BlobListOption.versions(true),
-                    Storage.BlobListOption.prefix(fileId))
+                    Storage.BlobListOption.prefix(fileName))
         } catch (e: StorageException) {
             throw e
         }
@@ -281,12 +281,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     override fun deletePatch(request: CosmasProto.DeletePatchRequest,
                              responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
+        LOG.info("Get request for delete patch from file={} with generation={}", request.fileId, request.generation)
         // Timestamp of file version witch contains patch
         val versionTimestamp = FileVersion.parseFrom(
                 this.storage.get(getBlobId(request.fileId, request.info, request.generation)).getContent()).timestamp
         // Text of version from which patch was applied (version before version witch contains patch)
         val (patchList, text) = try {
-            getPatchListAndPreviousText(request.fileId, versionTimestamp, request.info)
+            getPatchListAndPreviousText(fileStorageName(request.fileId, request.info), versionTimestamp, request.info)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
@@ -301,6 +302,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         if (indexCandidateDeletePatch == -1) {
             val errorStatus = Status.NOT_FOUND.withDescription(
                     "Can't delete patch. There is no such patch in storage")
+            LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
             return
         }
