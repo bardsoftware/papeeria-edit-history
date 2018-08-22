@@ -1088,6 +1088,7 @@ class CosmasGoogleCloudServiceTest {
                 .setUserId(userId)
                 .setTimestamp(timeStamp)
                 .setActualHash(md5Hash(text2))
+                .setUserName("Papeeria")
                 .build()
     }
 
