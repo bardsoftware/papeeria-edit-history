@@ -543,7 +543,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         return CosmasProto.Patch.newBuilder()
                 .setText(diffPatch)
                 .setUserId(COSMAS_ID)
-                .setUserName("COSMAS")
+                .setUserName("Papeeria")
                 .setTimestamp(timestamp)
                 .setActualHash(md5Hash(newText))
                 .build()
