@@ -65,6 +65,10 @@ message ChangeId {
     string newFileId = 2;
 }
 
+message FileIdVersionsInfo {
+    repeated FileVersionInfo versionInfo = 1;
+}
+
 message FileIdMap {
     map<string, string> prevIds = 1;
 }
