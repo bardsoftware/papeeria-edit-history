@@ -904,13 +904,73 @@ class CosmasGoogleCloudServiceTest {
                 .setGeneration(1L)
                 .setTimestamp(0L)
                 .build()
-        verify(fakeStorage).create(eq(service.getBlobInfo(FILE_ID, projectInfo())), eq(newVersion.toByteArray()))
         verify(fakeStorage).create(
                 eq(service.getBlobInfo("$PROJECT_ID-$FILE_ID-fileIdVersionsInfo", projectInfo())),
                 eq(FileIdVersionsInfo.newBuilder()
                         .addVersionInfo(versionInfo)
                         .build()
                         .toByteArray()))
+    }
+
+    @Test
+    fun correctVersionList() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val blob1 = getMockedBlob("ver1", 1)
+        val blob2 = getMockedBlob("ver2", 2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
+                .thenReturn(blob2)
+
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))).thenReturn(blob1).thenReturn(blob2)
+
+        val versionInfo1 = FileVersionInfo.newBuilder()
+                .setFileId(FILE_ID)
+                .setGeneration(1L)
+                .setTimestamp(0L)
+                .build()
+        val versionInfo2 = FileVersionInfo.newBuilder()
+                .setFileId(FILE_ID)
+                .setGeneration(2L)
+                .setTimestamp(0L)
+                .build()
+
+        val versionsInfo1 = FileIdVersionsInfo.newBuilder()
+                .addAllVersionInfo(listOf(versionInfo1))
+                .build()
+
+        val versionsInfo2 = FileIdVersionsInfo.newBuilder()
+                .addAllVersionInfo(listOf(versionInfo1, versionInfo2))
+                .build()
+
+        val blob = mock(Blob::class.java)
+        Mockito.`when`(blob.getContent())
+                .thenReturn(versionsInfo1.toByteArray())
+                .thenReturn(versionsInfo2.toByteArray())
+
+        `when`(fakeStorage.get(
+                eq(service.getBlobId("$PROJECT_ID-$FILE_ID-fileIdVersionsInfo", projectInfo()))))
+                .thenReturn(null).thenReturn(blob)
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        addPatchToService(patch1)
+        commit()
+        addPatchToService(patch2)
+        commit()
+        assertEquals(listOf(2L, 1L), getVersionsList())
+        verify(fakeStorage, times(2)).create(
+                eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))
+        verify(fakeStorage).create(
+                eq(service.getBlobInfo("$PROJECT_ID-$FILE_ID-fileIdVersionsInfo", projectInfo())),
+                eq(versionsInfo1.toByteArray()))
+        verify(fakeStorage).create(
+                eq(service.getBlobInfo("$PROJECT_ID-$FILE_ID-fileIdVersionsInfo", projectInfo())),
+                eq(versionsInfo2.toByteArray()))
+
     }
 
     @Test

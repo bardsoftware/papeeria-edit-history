@@ -200,16 +200,16 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 .setFileId(fileId)
                 // For in-memory storage implementation resultBlob.generation == null,
                 // but in this case we don't care about generation value, so I set it to 1L
-                .setGeneration(generation.let { 1L })
+                .setGeneration(generation ?: 1L)
                 .setTimestamp(timestamp)
+                .build()
+        val fileIdVersionsInfo = FileIdVersionsInfo.newBuilder()
+                .addAllVersionInfo(fileIdVersionsInfoList)
+                .addVersionInfo(newFileVersionInfo)
                 .build()
         this.storage.create(
                 getBlobInfo("${info.projectId}-$fileId-fileIdVersionsInfo", info),
-                FileIdVersionsInfo.newBuilder()
-                        .addAllVersionInfo(fileIdVersionsInfoList)
-                        .addVersionInfo(newFileVersionInfo)
-                        .build()
-                        .toByteArray())
+                fileIdVersionsInfo.toByteArray())
     }
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
@@ -262,7 +262,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 return
             }
 
-            versionList.addAll(fileIdVersionsInfo)
+            versionList.addAll(fileIdVersionsInfo.reversed())
             curFileId = prevIds[curFileId]
         }
         response.addAllVersions(versionList)
