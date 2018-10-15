@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import java.time.Clock
+import kotlin.math.min
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -253,16 +254,26 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         var curFileId = request.fileId
+        var rest = request.count
+        if (rest == 0) {
+            rest = -1
+        }
         val versionList = mutableListOf<CosmasProto.FileVersionInfo>()
-        while (curFileId != null) {
+        while (curFileId != null && rest != 0) {
             val fileIdVersionsInfo = try {
                 getFileIdVersionsInfo(request.info, curFileId)
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return
             }
-
-            versionList.addAll(fileIdVersionsInfo.reversed())
+            if (rest == -1) {
+                versionList.addAll(fileIdVersionsInfo.reversed())
+            } else {
+                val delta = min(rest, fileIdVersionsInfo.size)
+                versionList.addAll(fileIdVersionsInfo.reversed()
+                        .slice(0 until delta))
+                rest -= delta
+            }
             curFileId = prevIds[curFileId]
         }
         response.addAllVersions(versionList)

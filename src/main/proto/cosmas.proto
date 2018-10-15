@@ -96,6 +96,7 @@ message CreatePatchResponse {
 message FileVersionListRequest {
     ProjectInfo info = 1;
     string fileId = 2;
+    int32 count = 3;
 }
 
 
