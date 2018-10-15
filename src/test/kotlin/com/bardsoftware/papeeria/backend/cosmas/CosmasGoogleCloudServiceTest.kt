@@ -20,7 +20,6 @@ import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
-import com.google.common.base.Ticker
 import com.google.protobuf.ByteString
 import io.grpc.Status
 import io.grpc.StatusException

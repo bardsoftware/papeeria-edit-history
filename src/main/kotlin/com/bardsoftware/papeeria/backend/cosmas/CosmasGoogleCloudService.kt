@@ -255,7 +255,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         var curFileId = request.fileId
         var rest = request.count
-        if (rest == 0) {
+        if (rest == 0) { // default value
             rest = -1
         }
         val versionList = mutableListOf<CosmasProto.FileVersionInfo>()
