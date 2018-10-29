@@ -152,12 +152,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                                 .setFileId(fileId)
                                 // For in-memory storage implementation resultBlob.generation == null,
                                 // but in this case we don't care about generation value, so I set it to 1L
-                                .setGeneration(resBlob.generation.let { 1L })
+                                .setGeneration(resBlob.generation ?: 1L)
                                 .setTimestamp(curTime)
                                 .build()
                         val newWindow = getNewWindow(newInfo, fileVersion.historyWindowList)
                         project[fileId] = newVersion
                                 .clearPatches()
+                                .clearHistoryWindow()
                                 .addAllHistoryWindow(newWindow)
                                 .build()
                         LOG.info("File={} has been committed", fileId)
@@ -235,7 +236,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
         LOG.info("Get request for list of versions file={}", request.fileId)
-        if (request.windowsCount < 1 || request.firstWindowIndex < 1) {
+        if (request.windowsCount < 1 || request.firstWindowIndex < 0) {
             val description =
                     if (request.windowsCount < 1) "Requested windows count < 1" else "Requested window index < 0"
             val errorStatus = Status.INVALID_ARGUMENT.withDescription(
