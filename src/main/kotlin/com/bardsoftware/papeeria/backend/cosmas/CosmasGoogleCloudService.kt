@@ -67,6 +67,14 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
 
         val COSMAS_ID = "robot:::cosmas"
+
+        fun getNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
+                         windowMaxSize: Int): MutableList<FileVersionInfo> {
+            val res = mutableListOf<FileVersionInfo>()
+            res.add(newInfo)
+            res.addAll(oldWindow.slice(0 until min(windowMaxSize - 1, oldWindow.size)))
+            return res
+        }
     }
 
     fun bucketName(isFreePlan: Boolean): String = if (isFreePlan) this.freeBucketName else this.paidBucketName
@@ -156,6 +164,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                                 .setTimestamp(curTime)
                                 .build()
                         val newWindow = getNewWindow(newInfo, fileVersion.historyWindowList)
+                        //println("new: " + newWindow)
+                        //println("old: " + fileVersion.historyWindowList)
                         project[fileId] = newVersion
                                 .clearPatches()
                                 .clearHistoryWindow()
@@ -196,12 +206,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         responseObserver.onCompleted()
     }
 
-    private fun getNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>): List<FileVersionInfo> {
-        val res = mutableListOf<FileVersionInfo>()
-        res.add(newInfo)
-        res.addAll(oldWindow.slice(0 until min(windowMaxSize - 1, oldWindow.size)))
-        return res
-    }
+    private fun getNewWindow(newInfo: FileVersionInfo,
+                             oldWindow: List<FileVersionInfo>) = getNewWindow(newInfo, oldWindow, windowMaxSize)
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
@@ -263,10 +269,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     private fun getFileVersionList(info: ProjectInfo, fileId: String,
                                    firstWindowIndex: Int, windowsCount: Int): List<FileVersionInfo> {
         val versionInfos = getFileVersionListFromMemory(info, fileId)
-        if (versionInfos.size < windowMaxSize) {
-            return versionInfos
-        }
+
         if (firstWindowIndex == 0) {
+            if (versionInfos.size < windowMaxSize) {
+                return versionInfos
+            }
             versionInfos.addAll(getFileVersionListFromStorage(info, versionInfos.last(),
                     firstWindowIndex, windowsCount - 1))
             return versionInfos
@@ -277,7 +284,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     }
 
     private fun getFileVersionListFromMemory(info: ProjectInfo, fileId: String): MutableList<FileVersionInfo> {
-        return this.fileBuffer[info.projectId]?.get(fileId)?.historyWindowList ?: mutableListOf()
+        return this.fileBuffer[info.projectId]?.get(fileId)?.historyWindowList?.toMutableList() ?: mutableListOf()
     }
 
     private fun getFileVersionListFromStorage(info: ProjectInfo, initInfo: FileVersionInfo,
