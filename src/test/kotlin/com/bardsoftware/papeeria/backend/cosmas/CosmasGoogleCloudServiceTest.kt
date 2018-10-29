@@ -928,6 +928,13 @@ class CosmasGoogleCloudServiceTest {
                 getVersionsList(FILE_ID, PROJECT_ID, 2, 0))
     }
 
+    @Test
+    fun smallWindow() {
+        addManyVersions(3, 1)
+        assertEquals(listOf(3L, 2L, 1L),
+                getVersionsList(FILE_ID, PROJECT_ID, 3, 0))
+    }
+
     private fun addManyVersions(count: Long, windowMaxSize: Int) {
         val fakeStorage: Storage = mock(Storage::class.java)
 

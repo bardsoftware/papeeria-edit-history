@@ -164,8 +164,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                                 .setTimestamp(curTime)
                                 .build()
                         val newWindow = getNewWindow(newInfo, fileVersion.historyWindowList)
-                        //println("new: " + newWindow)
-                        //println("old: " + fileVersion.historyWindowList)
                         project[fileId] = newVersion
                                 .clearPatches()
                                 .clearHistoryWindow()
@@ -283,25 +281,25 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
     }
 
-    private fun getFileVersionListFromMemory(info: ProjectInfo, fileId: String): MutableList<FileVersionInfo> {
-        return this.fileBuffer[info.projectId]?.get(fileId)?.historyWindowList?.toMutableList() ?: mutableListOf()
+    private fun getFileVersionListFromMemory(projectInfo: ProjectInfo, fileId: String): MutableList<FileVersionInfo> {
+        return this.fileBuffer[projectInfo.projectId]?.get(fileId)?.historyWindowList?.toMutableList() ?: mutableListOf()
     }
 
-    private fun getFileVersionListFromStorage(info: ProjectInfo, initInfo: FileVersionInfo,
+    private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, initInfo: FileVersionInfo,
                                               firstWindowIndex: Int, windowsCount: Int): List<FileVersionInfo> {
         var curInfo = initInfo
-        val infoList = mutableListOf<FileVersionInfo>()
+        val versionList = mutableListOf<FileVersionInfo>()
         val totalSize = firstWindowIndex + windowsCount
         for (windowIndex in 0 until totalSize) {
             val blob: Blob? = try {
-                this.storage.get(getBlobId(curInfo.fileId, info, curInfo.generation))
+                this.storage.get(getBlobId(curInfo.fileId, projectInfo, curInfo.generation))
             } catch (e: StorageException) {
                 break
             }
             if (blob != null) {
                 val curWindow = CosmasProto.FileVersion.parseFrom(blob.getContent()).historyWindowList
                 if (windowIndex >= firstWindowIndex) {
-                    infoList.addAll(curWindow)
+                    versionList.addAll(curWindow)
                 }
                 if (curWindow.size != windowMaxSize) {
                     break
@@ -311,7 +309,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 break
             }
         }
-        return infoList
+        return versionList
     }
 
     private fun getPatchListAndPreviousText(fileName: String, timestamp: Long,
