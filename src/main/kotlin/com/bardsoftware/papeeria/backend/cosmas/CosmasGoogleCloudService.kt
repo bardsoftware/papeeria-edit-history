@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import java.time.Clock
+import kotlin.math.min
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -42,13 +43,15 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                                private val paidBucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service,
                                private val clock: Clock = Clock.systemUTC(),
-                               gsutilImageName: String = "") : CosmasGrpc.CosmasImplBase() {
+                               gsutilImageName: String = "",
+                               private val windowMaxSize: Int = 10) : CosmasGrpc.CosmasImplBase() {
 
     constructor(bucketName: String,
                 storage: Storage = StorageOptions.getDefaultInstance().service,
                 clock: Clock = Clock.systemUTC(),
-                gsutilImageName: String = "")
-            : this(bucketName, bucketName, storage, clock, gsutilImageName)
+                gsutilImageName: String = "",
+                windowMaxSize: Int = 10)
+            : this(bucketName, bucketName, storage, clock, gsutilImageName, windowMaxSize)
 
 
     private val fileBuffer =
@@ -56,6 +59,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     .withDefault { ConcurrentHashMap() }
 
     private val gsutilCommand = if (gsutilImageName != "") "docker run ${gsutilImageName} gsutil" else "gsutil"
+
 
     companion object {
         fun md5Hash(text: String): String {
@@ -138,13 +142,23 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     val newText = PatchCorrector.applyPatch(patches, text)
                     val cosmasHash = md5Hash(newText)
                     if (patches.last().actualHash == cosmasHash) {
+                        val curTime = clock.millis()
                         val newVersion = fileVersion.toBuilder()
                                 .setContent(ByteString.copyFrom(newText.toByteArray()))
-                                .setTimestamp(clock.millis())
-                        this.storage.create(getBlobInfo(fileId, request.info),
+                                .setTimestamp(curTime)
+                        val resBlob = this.storage.create(getBlobInfo(fileId, request.info),
                                 newVersion.build().toByteArray())
+                        val newInfo = FileVersionInfo.newBuilder()
+                                .setFileId(fileId)
+                                // For in-memory storage implementation resultBlob.generation == null,
+                                // but in this case we don't care about generation value, so I set it to 1L
+                                .setGeneration(resBlob.generation.let { 1L })
+                                .setTimestamp(curTime)
+                                .build()
+                        val newWindow = getNewWindow(newInfo, fileVersion.historyWindowList)
                         project[fileId] = newVersion
                                 .clearPatches()
+                                .addAllHistoryWindow(newWindow)
                                 .build()
                         LOG.info("File={} has been committed", fileId)
                     } else {
@@ -181,6 +195,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         responseObserver.onCompleted()
     }
 
+    private fun getNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>): List<FileVersionInfo> {
+        val res = mutableListOf<FileVersionInfo>()
+        res.add(newInfo)
+        res.addAll(oldWindow.slice(0 until min(windowMaxSize - 1, oldWindow.size)))
+        return res
+    }
+
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) {
         // if request.generation is -1, Cosmas will return the latest version of file
@@ -214,34 +235,18 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) {
         LOG.info("Get request for list of versions file={}", request.fileId)
-        val prevIds = try {
-            getPrevIds(request.info)
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
+        if (request.windowsCount < 1 || request.firstWindowIndex < 1) {
+            val description =
+                    if (request.windowsCount < 1) "Requested windows count < 1" else "Requested window index < 0"
+            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
+                    description)
+            LOG.error(description)
+            responseObserver.onError(StatusException(errorStatus))
             return
         }
         val response = CosmasProto.FileVersionListResponse.newBuilder()
-        var curFileId = request.fileId
-        val versionList = mutableListOf<CosmasProto.FileVersionInfo>()
-        while (curFileId != null) {
-            val blobs: Page<Blob> = try {
-                this.storage.list(bucketName(request.info.isFreePlan), Storage.BlobListOption.versions(true),
-                        Storage.BlobListOption.prefix(fileStorageName(curFileId, request.info)))
-            } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return
-            }
-            blobs.iterateAll().forEach {
-                val fileVersion = FileVersion.parseFrom(it.getContent())
-                val versionInfo = CosmasProto.FileVersionInfo.newBuilder()
-                        .setGeneration(it.generation)
-                        .setTimestamp(fileVersion.timestamp)
-                        .setFileId(curFileId)
-                versionList.add(versionInfo.build())
-            }
-            curFileId = prevIds[curFileId]
-        }
-        versionList.sortBy { it.timestamp }
+        val versionList = getFileVersionList(request.info, request.fileId,
+                request.firstWindowIndex, request.windowsCount)
         response.addAllVersions(versionList)
         if (response.versionsList.isEmpty()) {
             val errorStatus = Status.NOT_FOUND.withDescription(
@@ -252,6 +257,53 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
+    }
+
+    private fun getFileVersionList(info: ProjectInfo, fileId: String,
+                                   firstWindowIndex: Int, windowsCount: Int): List<FileVersionInfo> {
+        val versionInfos = getFileVersionListFromMemory(info, fileId)
+        if (versionInfos.size < windowMaxSize) {
+            return versionInfos
+        }
+        if (firstWindowIndex == 0) {
+            versionInfos.addAll(getFileVersionListFromStorage(info, versionInfos.last(),
+                    firstWindowIndex, windowsCount - 1))
+            return versionInfos
+        } else {
+            return getFileVersionListFromStorage(info, versionInfos.last(),
+                    firstWindowIndex - 1, windowsCount)
+        }
+    }
+
+    private fun getFileVersionListFromMemory(info: ProjectInfo, fileId: String): MutableList<FileVersionInfo> {
+        return this.fileBuffer[info.projectId]?.get(fileId)?.historyWindowList ?: mutableListOf()
+    }
+
+    private fun getFileVersionListFromStorage(info: ProjectInfo, initInfo: FileVersionInfo,
+                                              firstWindowIndex: Int, windowsCount: Int): List<FileVersionInfo> {
+        var curInfo = initInfo
+        val infoList = mutableListOf<FileVersionInfo>()
+        val totalSize = firstWindowIndex + windowsCount
+        for (windowIndex in 0 until totalSize) {
+            val blob: Blob? = try {
+                this.storage.get(getBlobId(curInfo.fileId, info, curInfo.generation))
+            } catch (e: StorageException) {
+                break
+            }
+            if (blob != null) {
+                val curWindow = CosmasProto.FileVersion.parseFrom(blob.getContent()).historyWindowList
+                if (windowIndex >= firstWindowIndex) {
+                    infoList.addAll(curWindow)
+                }
+                if (curWindow.size != windowMaxSize) {
+                    break
+                }
+                curInfo = curWindow.last()
+            } else {
+                break
+            }
+        }
+        return infoList
     }
 
     private fun getPatchListAndPreviousText(fileName: String, timestamp: Long,
@@ -464,31 +516,16 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun changeFileId(request: CosmasProto.ChangeFileIdRequest,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project={}", request.info.projectId)
-        val prevIds = try {
-            getPrevIds(request.info).toMutableMap()
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return
-        }
+
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getValue(request.info.projectId)
         }
         synchronized(project) {
             for (change in request.changesList) {
-                prevIds[change.newFileId] = change.oldFileId
                 if (project.contains(change.oldFileId)) {
                     project[change.newFileId] = project[change.oldFileId]
                     project.remove(change.oldFileId)
                 }
-
-            }
-            try {
-                this.storage.create(
-                        getBlobInfo("${request.info.projectId}-fileIdMap", request.info),
-                        CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
-            } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return
             }
         }
         val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
@@ -553,13 +590,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened at Cosmas", e)
         responseObserver.onError(e)
-    }
-
-    private fun getPrevIds(info: ProjectInfo): Map<String, String> {
-        val mapName = "${info.projectId}-fileIdMap"
-        val mapBytes: Blob = this.storage.get(getBlobId(mapName, info))
-                ?: return mapOf()
-        return CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     fun deleteFile(fileId: String, info: ProjectInfo) {
