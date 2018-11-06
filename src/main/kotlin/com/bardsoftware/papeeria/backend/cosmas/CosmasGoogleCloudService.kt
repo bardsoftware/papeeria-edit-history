@@ -498,7 +498,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 .setTimestamp(curTime)
                 .build()
 
-        val newWindow = getNewWindow(storageVersionInfo, latestVersion?.historyWindowList ?: emptyList())
+        val newWindow = getNewWindow(storageVersionInfo, versionToCommit.historyWindowList)
         synchronized(project) {
             project[request.fileId] = versionToCommit.toBuilder()
                     .clearPatches()

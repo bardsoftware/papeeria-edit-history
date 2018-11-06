@@ -320,7 +320,7 @@ class CosmasGoogleCloudServiceTest {
         val ver1 = createFileVersion("ver1").toBuilder().addAllPatches(listOf(patch)).build()
         val ver1Info = createFileVersionInfo(0)
         val ver2 = createFileVersion("ver2").toBuilder()
-                .addAllPatches(listOf(diffPatch))
+                .addPatches(diffPatch)
                 .addHistoryWindow(ver1Info)
                 .build()
         verify(fakeStorage).create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
@@ -832,6 +832,67 @@ class CosmasGoogleCloudServiceTest {
         addPatchToService(patch3, "3")
         commit()
         assertEquals(listOf(3L, 2L, 1L), getVersionsList("3"))
+    }
+
+    private fun commitAndThenForcedCommit(maxWindow: Int = 2): Storage {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val v1 = createFileVersion("ver1")
+        val v2 = createFileVersion("ver2", 0, listOf(createFileVersionInfo(1, 0)))
+        val blob1 = getMockedBlob(v1, 1)
+        val blob2 = getMockedBlob(v2, 2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(blob1)
+
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo()))))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
+                .thenReturn(blob2)
+
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))).thenReturn(blob1).thenReturn(blob2)
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock(), windowMaxSize = maxWindow)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        addPatchToService(patch1)
+        commit()
+        forcedCommit("ver2", 0)
+        return fakeStorage
+    }
+
+    @Test
+    fun versionListForcedCommitListInMemory() {
+        val fakeStorage = commitAndThenForcedCommit()
+        assertEquals(listOf(2L, 1L), getVersionsList())
+        verify(fakeStorage, times(2)).create(
+                eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))
+
+    }
+
+    @Test
+    fun versionListForcedCommitListInStorage() {
+        val fakeStorage = commitAndThenForcedCommit(1)
+        assertEquals(listOf(2L, 1L), getVersionsList(windowsCount = 2))
+        verify(fakeStorage, times(2)).create(
+                eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))
+
+    }
+
+    @Test
+    fun oneForcedCommitVersionList() {
+        val fakeStorage: Storage = mock(Storage::class.java)
+        val v1 = createFileVersion("ver1")
+        val blob1 = getMockedBlob(v1, 1)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(blob1)
+
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java))).thenReturn(blob1)
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
+        forcedCommit("ver1", 0)
+        assertEquals(listOf(1L), getVersionsList())
     }
 
     @Test
