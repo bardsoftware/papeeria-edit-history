@@ -318,7 +318,11 @@ class CosmasGoogleCloudServiceTest {
         forcedCommit("ver2", 3)
         val diffPatch = diffPatch(COSMAS_ID, "ver1", "ver2", 3)
         val ver1 = createFileVersion("ver1").toBuilder().addAllPatches(listOf(patch)).build()
-        val ver2 = createFileVersion("ver2").toBuilder().addAllPatches(listOf(diffPatch)).build()
+        val ver1Info = createFileVersionInfo(0)
+        val ver2 = createFileVersion("ver2").toBuilder()
+                .addAllPatches(listOf(diffPatch))
+                .addHistoryWindow(ver1Info)
+                .build()
         verify(fakeStorage).create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 eq(ver1.toByteArray()))
         verify(fakeStorage).create(eq(service.getBlobInfo(FILE_ID, projectInfo())),

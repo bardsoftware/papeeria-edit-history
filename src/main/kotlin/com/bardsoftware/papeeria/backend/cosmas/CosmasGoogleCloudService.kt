@@ -456,29 +456,53 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             handleStorageException(e, responseObserver)
             return
         }
-        val previousVersion = if (blob != null) {
-            CosmasProto.FileVersion.parseFrom(blob.getContent()).content.toStringUtf8()
-        } else ""
+        val latestVersion = if (blob != null) {
+            CosmasProto.FileVersion.parseFrom(blob.getContent())
+        } else FileVersion.getDefaultInstance()
 
-        val actualVersion = request.actualContent.toStringUtf8()
-        val patch = getDiffPatch(previousVersion, actualVersion, request.timestamp)
+        val windowToCommit = if (blob != null) {
+            val latestVersionInfo = FileVersionInfo.newBuilder()
+                    .setFileId(request.fileId)
+                    // For in-memory storage implementation resultBlob.generation == null,
+                    // but in this case we don't care about generation value, so I set it to 1L
+                    .setGeneration(blob.generation ?: 1L)
+                    .setTimestamp(latestVersion.timestamp)
+                    .build()
+            getNewWindow(latestVersionInfo, latestVersion.historyWindowList)
+        } else emptyList<FileVersionInfo>()
 
-        val newVersion = CosmasProto.FileVersion.newBuilder()
+        val actualTextVersion = request.actualContent.toStringUtf8()
+        val patch = getDiffPatch(latestVersion.content.toStringUtf8(), actualTextVersion, request.timestamp)
+        val curTime = clock.millis()
+
+        val versionToCommit = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
-                .setContent(ByteString.copyFrom(actualVersion.toByteArray()))
-                .setTimestamp(clock.millis())
+                .setContent(ByteString.copyFrom(actualTextVersion.toByteArray()))
+                .setTimestamp(curTime)
+                .addAllHistoryWindow(windowToCommit)
                 .build()
-        try {
+        val resBlob = try {
             this.storage.create(
                     getBlobInfo(request.fileId, request.info),
-                    newVersion.toByteArray())
+                    versionToCommit.toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
         }
+        val storageVersionInfo = FileVersionInfo.newBuilder()
+                .setFileId(request.fileId)
+                // For in-memory storage implementation resultBlob.generation == null,
+                // but in this case we don't care about generation value, so I set it to 1L
+                .setGeneration(resBlob.generation ?: 1L)
+                .setTimestamp(curTime)
+                .build()
+
+        val newWindow = getNewWindow(storageVersionInfo, latestVersion?.historyWindowList ?: emptyList())
         synchronized(project) {
-            project[request.fileId] = newVersion.toBuilder()
+            project[request.fileId] = versionToCommit.toBuilder()
                     .clearPatches()
+                    .clearHistoryWindow()
+                    .addAllHistoryWindow(newWindow)
                     .build()
         }
         synchronized(this.fileBuffer) {
