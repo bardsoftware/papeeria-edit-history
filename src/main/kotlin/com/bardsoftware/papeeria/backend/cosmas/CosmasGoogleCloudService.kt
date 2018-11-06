@@ -282,7 +282,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     }
 
     private fun getFileVersionListFromMemory(projectInfo: ProjectInfo, fileId: String): MutableList<FileVersionInfo> {
-        return this.fileBuffer[projectInfo.projectId]?.get(fileId)?.historyWindowList?.toMutableList() ?: mutableListOf()
+        return this.fileBuffer[projectInfo.projectId]?.get(fileId)?.historyWindowList?.toMutableList()
+                ?: mutableListOf()
     }
 
     private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, initInfo: FileVersionInfo,
@@ -450,22 +451,22 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             this.fileBuffer.getValue(request.info.projectId)
         }
         // get last version from storage
-        val blob: Blob? = try {
+        val latestVersionBlob: Blob? = try {
             this.storage.get(getBlobId(request.fileId, request.info))
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return
         }
-        val latestVersion = if (blob != null) {
-            CosmasProto.FileVersion.parseFrom(blob.getContent())
+        val latestVersion = if (latestVersionBlob != null) {
+            CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
         } else FileVersion.getDefaultInstance()
 
-        val windowToCommit = if (blob != null) {
+        val windowToCommit = if (latestVersionBlob != null) {
             val latestVersionInfo = FileVersionInfo.newBuilder()
                     .setFileId(request.fileId)
                     // For in-memory storage implementation resultBlob.generation == null,
                     // but in this case we don't care about generation value, so I set it to 1L
-                    .setGeneration(blob.generation ?: 1L)
+                    .setGeneration(latestVersionBlob.generation ?: 1L)
                     .setTimestamp(latestVersion.timestamp)
                     .build()
             getNewWindow(latestVersionInfo, latestVersion.historyWindowList)
@@ -481,7 +482,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 .setTimestamp(curTime)
                 .addAllHistoryWindow(windowToCommit)
                 .build()
-        val resBlob = try {
+        val committedBlob = try {
             this.storage.create(
                     getBlobInfo(request.fileId, request.info),
                     versionToCommit.toByteArray())
@@ -493,7 +494,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 .setFileId(request.fileId)
                 // For in-memory storage implementation resultBlob.generation == null,
                 // but in this case we don't care about generation value, so I set it to 1L
-                .setGeneration(resBlob.generation ?: 1L)
+                .setGeneration(committedBlob.generation ?: 1L)
                 .setTimestamp(curTime)
                 .build()
 
