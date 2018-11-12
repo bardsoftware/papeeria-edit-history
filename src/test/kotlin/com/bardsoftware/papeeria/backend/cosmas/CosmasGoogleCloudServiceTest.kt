@@ -886,7 +886,6 @@ class CosmasGoogleCloudServiceTest {
         val blob1 = getMockedBlob(v1, 1)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
                 .thenReturn(blob1)
-
         Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 any(ByteArray::class.java))).thenReturn(blob1)
 

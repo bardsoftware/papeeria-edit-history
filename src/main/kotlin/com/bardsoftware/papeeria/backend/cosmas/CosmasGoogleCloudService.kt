@@ -442,6 +442,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
         } else FileVersion.getDefaultInstance()
 
+
         val windowToCommit = if (latestVersionBlob != null) {
             val latestVersionInfo = FileVersionInfo.newBuilder()
                     .setFileId(request.fileId)
@@ -455,42 +456,18 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
         val actualTextVersion = request.actualContent.toStringUtf8()
         val patch = getDiffPatch(latestVersion.content.toStringUtf8(), actualTextVersion, request.timestamp)
-
-        val curTime = clock.millis()
-
         val versionToCommit = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
-                .setContent(ByteString.copyFrom(actualTextVersion.toByteArray()))
-                .setTimestamp(curTime)
                 .addAllHistoryWindow(windowToCommit)
                 .build()
-        val committedBlob = try {
-            this.storage.create(
-                    getBlobInfo(request.fileId, request.info),
-                    versionToCommit.toByteArray())
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return
-        }
-        val storageVersionInfo = FileVersionInfo.newBuilder()
-                .setFileId(request.fileId)
-                // For in-memory storage implementation resultBlob.generation == null,
-                // but in this case we don't care about generation value, so I set it to 1L
-                .setGeneration(committedBlob.generation ?: 1L)
-                .setTimestamp(curTime)
-                .build()
-
-        val newWindow = getNewWindow(storageVersionInfo, versionToCommit.historyWindowList)
         synchronized(project) {
-            project[request.fileId] = versionToCommit.toBuilder()
-                    .clearPatches()
-                    .clearHistoryWindow()
-                    .addAllHistoryWindow(newWindow)
-                    .build()
+            project[request.fileId] = versionToCommit
         }
         synchronized(this.fileBuffer) {
             this.fileBuffer[request.info.projectId] = project
         }
+        commitFromMemoryToGCS(request.info, request.fileId, actualTextVersion)
+
         val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
