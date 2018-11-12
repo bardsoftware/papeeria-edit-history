@@ -192,14 +192,17 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val project = this.fileBuffer[projectInfo.projectId] ?: return
         val fileVersion = project[fileId] ?: return
 
-        // Just committing buffered version with new content to GCS
+        // Just committing buffered version with new content and current timestamp to GCS
         val curTime = clock.millis()
         val newVersion = fileVersion.toBuilder()
                 .setContent(ByteString.copyFrom(newText.toByteArray()))
                 .setTimestamp(curTime)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
-        // Preparing version in memory
+        // Preparing version in memory to save following invariants for it:
+        // 1) History window points to the latest N versions in GCS
+        // 2) It has content that equals to content of the latest version in GCS
+        // 3) Patches are applicable to it content
         val newInfo = FileVersionInfo.newBuilder()
                 .setFileId(fileId)
                 // For in-memory storage implementation(used for tests only) resultBlob.generation == null,
@@ -431,7 +434,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getValue(request.info.projectId)
         }
-        // get last version from storage
+        // get last version from storage or default instance if it doesn't exist
         val latestVersionBlob: Blob? = try {
             this.storage.get(getBlobId(request.fileId, request.info))
         } catch (e: StorageException) {
@@ -443,6 +446,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         } else FileVersion.getDefaultInstance()
 
         // Preparing new version in memory to replace bad or nonexistent one in buffer
+        // Window should point to the latest N versions
         val windowToCommit = if (latestVersionBlob != null) {
             val latestVersionInfo = FileVersionInfo.newBuilder()
                     .setFileId(request.fileId)
@@ -453,7 +457,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     .build()
             getNewWindow(latestVersionInfo, latestVersion.historyWindowList)
         } else emptyList<FileVersionInfo>()
+        // Content is taken from the latest versions
         val actualText = request.actualContent.toStringUtf8()
+        // Patches can be applied to this version
         val patch = getDiffPatch(latestVersion.content.toStringUtf8(), actualText, request.timestamp)
         val versionToCommit = CosmasProto.FileVersion.newBuilder()
                 .addPatches(patch)
@@ -466,7 +472,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             this.fileBuffer[request.info.projectId] = project
         }
 
-        // Committing correct version in buffer to GCS
+        // Committing correct version from buffer to GCS
         commitFromMemoryToGCS(request.info, request.fileId, actualText)
 
         val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
