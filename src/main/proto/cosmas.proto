@@ -89,8 +89,7 @@ message CreatePatchResponse {
 message FileVersionListRequest {
     ProjectInfo info = 1;
     string fileId = 2;
-    int32 firstWindowIndex = 3; // should be >= 0
-    int32 windowsCount = 4; // should be > 0
+    int64 startGeneration = 3; // if startGeneration is -1, Cosmas returns list of N(=10 by default) latest versions
 }
 
 

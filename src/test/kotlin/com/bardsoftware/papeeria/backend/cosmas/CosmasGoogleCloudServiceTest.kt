@@ -872,7 +872,7 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun versionListForcedCommitListInStorage() {
         val fakeStorage = commitAndThenForcedCommit(1)
-        assertEquals(listOf(2L, 1L), getVersionsList(windowsCount = 2))
+        assertEquals(listOf(1L), getVersionsList(startGeneration = 2L))
         verify(fakeStorage, times(2)).create(
                 eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 any(ByteArray::class.java))
@@ -937,67 +937,48 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun getTwoWindows() {
-        addManyVersions(4, 2)
-        assertEquals(listOf(4L, 3L, 2L, 1L), getVersionsList(FILE_ID, PROJECT_ID, 2))
-    }
-
-    @Test
     fun getSecondWindow() {
         addManyVersions(4, 2)
-        assertEquals(listOf(2L, 1L), getVersionsList(FILE_ID, PROJECT_ID, 1, 1))
+        assertEquals(listOf(2L, 1L), getVersionsList(FILE_ID, PROJECT_ID, 3L))
     }
 
     @Test
-    fun tryToGetTooMuch() {
-        addManyVersions(4, 2)
-        assertEquals(listOf(4L, 3L, 2L, 1L), getVersionsList(FILE_ID, PROJECT_ID, 43))
-    }
-
-    @Test
-    fun indexOutOfRange() {
+    fun generationDoesntExists() {
         addManyVersions(2, 2)
-        val (recorder, request) = getStreamRecorderAndRequestForVersionList(FILE_ID, projectInfo(), 1, 1)
+        val (recorder, request) = getStreamRecorderAndRequestForVersionList(FILE_ID, projectInfo(), 43)
+        this.service.fileVersionList(request, recorder)
+        assertNotNull(recorder.error)
+        assertEquals(Status.NOT_FOUND.code, (recorder.error as StatusException).status.code)
+    }
+
+
+    @Test
+    fun windowInTheMiddle() {
+        addManyVersions(6, 2)
+        assertEquals(listOf(4L, 3L),
+                getVersionsList(FILE_ID, PROJECT_ID, 5L))
+    }
+
+    @Test
+    fun normalWorkEmulation() {
+        addManyVersions(6, 2)
+        assertEquals(listOf(6L, 5L),
+                getVersionsList(FILE_ID, PROJECT_ID, -1L))
+        assertEquals(listOf(4L, 3L),
+                getVersionsList(FILE_ID, PROJECT_ID, 5L))
+        assertEquals(listOf(2L, 1L),
+                getVersionsList(FILE_ID, PROJECT_ID, 3L))
+        val (recorder, request) = getStreamRecorderAndRequestForVersionList(FILE_ID, projectInfo(), 1L)
         this.service.fileVersionList(request, recorder)
         assertNotNull(recorder.error)
         assertEquals(Status.NOT_FOUND.code, (recorder.error as StatusException).status.code)
     }
 
     @Test
-    fun badWindowsCount() {
-        val (recorder, request) = getStreamRecorderAndRequestForVersionList(FILE_ID, projectInfo(), 0, 1)
-        this.service.fileVersionList(request, recorder)
-        assertNotNull(recorder.error)
-        assertEquals(Status.INVALID_ARGUMENT.code, (recorder.error as StatusException).status.code)
-    }
-
-    @Test
-    fun badWindowIndex() {
-        val (recorder, request) = getStreamRecorderAndRequestForVersionList(FILE_ID, projectInfo(), 1, -1)
-        this.service.fileVersionList(request, recorder)
-        assertNotNull(recorder.error)
-        assertEquals(Status.INVALID_ARGUMENT.code, (recorder.error as StatusException).status.code)
-    }
-
-    @Test
-    fun windowInTheMiddle() {
-        addManyVersions(6, 2)
-        assertEquals(listOf(4L, 3L),
-                getVersionsList(FILE_ID, PROJECT_ID, 1, 1))
-    }
-
-    @Test
-    fun halfOfWindow() {
-        addManyVersions(3, 2)
-        assertEquals(listOf(3L, 2L, 1L),
-                getVersionsList(FILE_ID, PROJECT_ID, 2, 0))
-    }
-
-    @Test
     fun smallWindow() {
         addManyVersions(3, 1)
-        assertEquals(listOf(3L, 2L, 1L),
-                getVersionsList(FILE_ID, PROJECT_ID, 3, 0))
+        assertEquals(listOf(2L),
+                getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
     private fun addManyVersions(count: Long, windowMaxSize: Int) {
@@ -1098,24 +1079,22 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getStreamRecorderAndRequestForVersionList(fileId: String = FILE_ID, info: ProjectInfo = projectInfo(),
-                                                          windowsCount: Int = 1, firstWindowIndex: Int = 0):
+                                                          startGeneration: Long):
             Pair<StreamRecorder<FileVersionListResponse>, FileVersionListRequest> {
         val listVersionsRecorder: StreamRecorder<FileVersionListResponse> = StreamRecorder.create()
         val listVersionsRequest = FileVersionListRequest
                 .newBuilder()
                 .setFileId(fileId)
                 .setInfo(info)
-                .setWindowsCount(windowsCount)
-                .setFirstWindowIndex(firstWindowIndex)
+                .setStartGeneration(startGeneration)
                 .build()
         return Pair(listVersionsRecorder, listVersionsRequest)
     }
 
     private fun getVersionsList(fileId: String = FILE_ID, projectId: String = PROJECT_ID,
-                                windowsCount: Int = 1, firstWindowIndex: Int = 0): List<Long> {
+                                startGeneration: Long = -1L): List<Long> {
         val (listVersionsRecorder, listVersionsRequest) =
-                getStreamRecorderAndRequestForVersionList(fileId, projectInfo(projectId = projectId),
-                        windowsCount, firstWindowIndex)
+                getStreamRecorderAndRequestForVersionList(fileId, projectInfo(projectId = projectId), startGeneration)
         this.service.fileVersionList(listVersionsRequest, listVersionsRecorder)
         return listVersionsRecorder.values[0].versionsList.map { e -> e.generation }
     }
