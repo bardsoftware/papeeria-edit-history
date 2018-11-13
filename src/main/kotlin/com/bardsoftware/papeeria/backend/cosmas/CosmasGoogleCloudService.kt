@@ -58,7 +58,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
                     .withDefault { ConcurrentHashMap() }
 
-    private val gsutilCommand = if (gsutilImageName != "") "docker run ${gsutilImageName} gsutil" else "gsutil"
+    private val gsutilCommand = if (gsutilImageName != "") "docker run $gsutilImageName gsutil" else "gsutil"
 
 
     companion object {
@@ -66,7 +66,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             return Hashing.md5().newHasher().putString(text, Charsets.UTF_8).hash().toString()
         }
 
-        val COSMAS_ID = "robot:::cosmas"
+        const val COSMAS_ID = "robot:::cosmas"
 
         fun getNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
                          windowMaxSize: Int): MutableList<FileVersionInfo> {
@@ -287,7 +287,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                 ?: emptyList()
     }
 
-    private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, fileId: String, startGeneration: Long): List<FileVersionInfo> {
+    private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, fileId: String,
+                                              startGeneration: Long): List<FileVersionInfo> {
 
         val blob: Blob? = this.storage.get(getBlobId(fileId, projectInfo, startGeneration)) // throws StorageException
         return if (blob != null) {
