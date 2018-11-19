@@ -100,8 +100,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val userId = request.patchesList.first().userId
         LOG.info("Get request for create new patch of file={} by user={}", request.fileId, userId)
-        synchronized(this.fileBuffer) {
-            val project = this.fileBuffer.getValue(request.info.projectId)
+        val project = this.fileBuffer.getValue(request.info.projectId)
+        synchronized(project) {
             val fileVersion = project[request.fileId]
             if (fileVersion != null) {
                 project[request.fileId] = fileVersion.toBuilder()
@@ -135,53 +135,53 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
 
         val response = CosmasProto.CommitVersionResponse.newBuilder()
+        synchronized(project) {
+            try {
+                for ((fileId, fileVersion) in project) {
+                    try {
+                        val text = fileVersion.content.toStringUtf8()
+                        val patches = fileVersion.patchesList.toMutableList()
+                        if (patches.isEmpty()) {
+                            LOG.info("File={} has no patches, no need to commit it", fileId)
+                            continue
+                        }
+                        patches.sortBy { it.timestamp }
 
-        try {
-            for ((fileId, fileVersion) in project) {
-                try {
-                    val text = fileVersion.content.toStringUtf8()
-                    val patches = fileVersion.patchesList.toMutableList()
-                    if (patches.isEmpty()) {
-                        LOG.info("File={} has no patches, no need to commit it", fileId)
-                        continue
-                    }
-                    patches.sortBy { it.timestamp }
-
-                    val newText = PatchCorrector.applyPatch(patches, text)
-                    val cosmasHash = md5Hash(newText)
-                    if (patches.last().actualHash == cosmasHash) {
-                        commitFromMemoryToGCS(request.info, fileId, newText)
-                        LOG.info("File={} has been committed", fileId)
-                    } else {
-                        val actualHash = patches.last().actualHash
-                        LOG.error("Commit failure: File={} has Cosmas hash={}, but last actual hash={}",
-                                fileId, cosmasHash, actualHash)
-                        val badFile = CosmasProto.FileInfo.newBuilder()
-                                .setFileId(fileId)
-                                .setProjectId(request.info.projectId)
-                                .build()
-                        response.addBadFiles(badFile)
-                    }
-                } catch (e: Throwable) {
-                    LOG.error("Error while applying patches to file={}", fileId)
-                    when (e) {
-                        is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                        val newText = PatchCorrector.applyPatch(patches, text)
+                        val cosmasHash = md5Hash(newText)
+                        if (patches.last().actualHash == cosmasHash) {
+                            commitFromMemoryToGCS(request.info, fileId, newText)
+                            LOG.info("File={} has been committed", fileId)
+                        } else {
+                            val actualHash = patches.last().actualHash
+                            LOG.error("Commit failure: File={} has Cosmas hash={}, but last actual hash={}",
+                                    fileId, cosmasHash, actualHash)
                             val badFile = CosmasProto.FileInfo.newBuilder()
                                     .setFileId(fileId)
                                     .setProjectId(request.info.projectId)
                                     .build()
                             response.addBadFiles(badFile)
                         }
-                        else -> throw e
+                    } catch (e: Throwable) {
+                        LOG.error("Error while applying patches to file={}", fileId)
+                        when (e) {
+                            is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                                val badFile = CosmasProto.FileInfo.newBuilder()
+                                        .setFileId(fileId)
+                                        .setProjectId(request.info.projectId)
+                                        .build()
+                                response.addBadFiles(badFile)
+                            }
+                            else -> throw e
+                        }
+
                     }
-
                 }
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
             }
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return
         }
-
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
@@ -431,8 +431,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) {
         LOG.info("Get request for commit file={} in force", request.fileId)
-        synchronized(this.fileBuffer) {
-            val project = this.fileBuffer.getValue(request.info.projectId)
+        val project = this.fileBuffer.getValue(request.info.projectId)
+        synchronized(project) {
 
             // Getting last version from storage or default instance if it doesn't exist
             val latestVersionBlob: Blob? = try {
@@ -512,9 +512,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project={}", request.info.projectId)
 
-        val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getValue(request.info.projectId)
-        }
+        val project = this.fileBuffer.getValue(request.info.projectId)
+
         synchronized(project) {
             for (change in request.changesList) {
                 if (project.contains(change.oldFileId)) {
