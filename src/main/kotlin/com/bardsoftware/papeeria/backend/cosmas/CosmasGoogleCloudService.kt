@@ -67,7 +67,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     fun bucketName(isFreePlan: Boolean): String = if (isFreePlan) this.freeBucketName else this.paidBucketName
 
-    fun fileStorageName(fileId: String, info: ProjectInfo): String = info.ownerId + "/" + fileId
+    fun hashUserId(userId: String) = md5Hash(userId)
+
+    fun fileStorageName(fileId: String, info: ProjectInfo): String = hashUserId(info.ownerId) + "/" + fileId
 
     fun getBlobId(fileId: String, info: ProjectInfo, generation: Long? = null): BlobId {
         return BlobId.of(bucketName(info.isFreePlan), fileStorageName(fileId, info), generation)
@@ -512,8 +514,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val oldBucketName = bucketName(!isFreePlanNow)
         val newBucketName = bucketName(isFreePlanNow)
-        val gsutilCopyCommand = "$gsutilCommand cp -r -A gs://$oldBucketName/${request.userId}/*" +
-                " gs://$newBucketName/${request.userId}"
+        val gsutilCopyCommand = "$gsutilCommand cp -r -A gs://$oldBucketName/${hashUserId(request.userId)}/*" +
+                " gs://$newBucketName/${hashUserId(request.userId)}"
         val copyProcess = runtime.exec(gsutilCopyCommand)
         val copyRes = copyProcess.waitFor()
         if (copyRes != 0) {
@@ -523,7 +525,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             responseObserver.onError(StatusException(errorStatus))
             return
         }
-        val gsutilRemoveCommand = "$gsutilCommand rm -r -a gs://$oldBucketName/${request.userId}"
+        val gsutilRemoveCommand = "$gsutilCommand rm -r -a gs://$oldBucketName/${hashUserId(request.userId)}"
         val removeProcess = runtime.exec(gsutilRemoveCommand)
         val removeRes = removeProcess.waitFor()
         if (removeRes != 0) {
