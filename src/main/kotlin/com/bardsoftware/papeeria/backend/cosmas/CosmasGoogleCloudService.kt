@@ -100,6 +100,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val userId = request.patchesList.first().userId
         LOG.info("Get request for create new patch of file={} by user={}", request.fileId, userId)
+        synchronized(this.fileBuffer) {
+            if (this.fileBuffer[request.info.projectId] == null) {
+                this.fileBuffer[request.info.projectId] = ConcurrentHashMap()
+            }
+        }
         val project = this.fileBuffer.getValue(request.info.projectId)
         synchronized(project) {
             val fileVersion = project[request.fileId]
@@ -112,7 +117,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                         .addAllPatches(request.patchesList)
                         .build()
             }
-            this.fileBuffer[request.info.projectId] = project
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
@@ -431,6 +435,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) {
         LOG.info("Get request for commit file={} in force", request.fileId)
+        synchronized(this.fileBuffer) {
+            if (this.fileBuffer[request.info.projectId] == null) {
+                this.fileBuffer[request.info.projectId] = ConcurrentHashMap()
+            }
+        }
         val project = this.fileBuffer.getValue(request.info.projectId)
         synchronized(project) {
 
@@ -467,7 +476,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     .build()
 
             project[request.fileId] = versionToCommit
-            this.fileBuffer[request.info.projectId] = project
 
             // Committing correct version from buffer to GCS
             commitFromMemoryToGCS(request.info, request.fileId, actualText)
