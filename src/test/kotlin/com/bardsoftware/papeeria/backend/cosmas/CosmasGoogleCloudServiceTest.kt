@@ -15,7 +15,7 @@ limitations under the License.
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_ID
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.getNewWindow
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.buildNewWindow
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
@@ -1005,7 +1005,7 @@ class CosmasGoogleCloudServiceTest {
                     .thenReturn(blob)
             Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                     eq(version.toByteArray()))).thenReturn(blob)
-            curWindow = getNewWindow(versionInfo, curWindow, windowMaxSize)
+            curWindow = buildNewWindow(versionInfo, curWindow, windowMaxSize)
         }
         for (patch in patches) {
             addPatchToService(patch)
