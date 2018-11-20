@@ -50,6 +50,7 @@ message FileVersion {
     repeated Patch patches = 1;
     bytes content = 2;
     int64 timestamp = 3;
+    repeated FileVersionInfo historyWindow = 4;
 }
 
 message Patch {
@@ -63,10 +64,6 @@ message Patch {
 message ChangeId {
     string oldFileId = 1;
     string newFileId = 2;
-}
-
-message FileIdMap {
-    map<string, string> prevIds = 1;
 }
 
 message GetVersionRequest {
@@ -92,6 +89,7 @@ message CreatePatchResponse {
 message FileVersionListRequest {
     ProjectInfo info = 1;
     string fileId = 2;
+    int64 startGeneration = 3; // if startGeneration is -1, Cosmas returns list of N(=10 by default) latest versions
 }
 
 
