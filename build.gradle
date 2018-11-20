@@ -36,7 +36,7 @@ repositories {
 
 dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    compile 'com.google.protobuf:protobuf-java:3.5.+'
+    compile 'com.google.protobuf:protobuf-java:3.+'
     compile 'io.grpc:grpc-stub:1.+'
     compile 'io.grpc:grpc-protobuf:1.+'
     compile "io.grpc:grpc-netty:1.+"
@@ -55,7 +55,7 @@ dependencies {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.5.+'
+        artifact = 'com.google.protobuf:protoc:3.+'
     }
     plugins {
         grpc {

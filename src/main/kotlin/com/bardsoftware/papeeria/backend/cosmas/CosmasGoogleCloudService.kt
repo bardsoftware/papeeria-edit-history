@@ -56,7 +56,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     private val fileBuffer =
             ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
-                    .withDefault { ConcurrentHashMap() }
 
     private val gsutilCommand = if (gsutilImageName != "") "docker run $gsutilImageName gsutil" else "gsutil"
 
@@ -100,12 +99,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         val userId = request.patchesList.first().userId
         LOG.info("Get request for create new patch of file={} by user={}", request.fileId, userId)
-        synchronized(this.fileBuffer) {
-            if (this.fileBuffer[request.info.projectId] == null) {
-                this.fileBuffer[request.info.projectId] = ConcurrentHashMap()
-            }
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
-        val project = this.fileBuffer.getValue(request.info.projectId)
         synchronized(project) {
             val fileVersion = project[request.fileId]
             if (fileVersion != null) {
@@ -201,7 +197,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         // Just committing buffered version with new content and current timestamp to GCS
         val curTime = clock.millis()
         val newVersion = fileVersion.toBuilder()
-                .setContent(ByteString.copyFrom(newText.toByteArray()))
+                .setContent(ByteString.copyFromUtf8(newText))
                 .setTimestamp(curTime)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
@@ -435,12 +431,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) {
         LOG.info("Get request for commit file={} in force", request.fileId)
-        synchronized(this.fileBuffer) {
-            if (this.fileBuffer[request.info.projectId] == null) {
-                this.fileBuffer[request.info.projectId] = ConcurrentHashMap()
-            }
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
-        val project = this.fileBuffer.getValue(request.info.projectId)
         synchronized(project) {
 
             // Getting last version from storage or default instance if it doesn't exist
@@ -520,13 +513,14 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project={}", request.info.projectId)
 
-        val project = this.fileBuffer.getValue(request.info.projectId)
-
-        synchronized(project) {
-            for (change in request.changesList) {
-                if (project.contains(change.oldFileId)) {
-                    project[change.newFileId] = project[change.oldFileId]
-                    project.remove(change.oldFileId)
+        val project = this.fileBuffer[request.info.projectId]
+        if (project != null) {
+            synchronized(project) {
+                for (change in request.changesList) {
+                    if (project.contains(change.oldFileId)) {
+                        project[change.newFileId] = project[change.oldFileId]
+                        project.remove(change.oldFileId)
+                    }
                 }
             }
         }
