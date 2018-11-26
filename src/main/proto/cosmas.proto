@@ -55,10 +55,10 @@ message FileVersion {
 
 message Patch {
     string userId = 1;
-    string userName = 2;
-    string text = 3;
-    int64 timestamp = 4;
-    string actualHash = 5;
+    string text = 2;
+    int64 timestamp = 3;
+    string actualHash = 4;
+    string userName = 6;
 }
 
 message ChangeId {
