@@ -105,16 +105,10 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
         synchronized(project) {
-            val fileVersion = project[request.fileId]
-            if (fileVersion != null) {
-                project[request.fileId] = fileVersion.toBuilder()
-                        .addAllPatches(request.patchesList)
-                        .build()
-            } else {
-                project[request.fileId] = CosmasProto.FileVersion.newBuilder()
-                        .addAllPatches(request.patchesList)
-                        .build()
-            }
+            val fileVersion = project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
+            project[request.fileId] = fileVersion.toBuilder()
+                    .addAllPatches(request.patchesList)
+                    .build()
         }
         val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
@@ -437,40 +431,17 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
         synchronized(project) {
-
-            // Getting last version from storage or default instance if it doesn't exist
-            val latestVersionBlob: Blob? = try {
-                this.storage.get(getBlobId(request.fileId, request.info))
+            val versionToCommit = try {
+                // Restoring the latest version in GCS to buffer
+                restoreFileFromStorage(request.fileId, request.info, project)
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return
             }
-            val latestVersion = if (latestVersionBlob != null) {
-                CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
-            } else FileVersion.getDefaultInstance()
-
-            // Preparing new version in memory to replace bad or nonexistent one in buffer
-            // Window should point to the latest N versions
-            val windowToCommit = if (latestVersionBlob != null) {
-                val latestVersionInfo = FileVersionInfo.newBuilder()
-                        .setFileId(request.fileId)
-                        // For in-memory storage implementation resultBlob.generation == null,
-                        // but in this case we don't care about generation value, so I set it to 1L
-                        .setGeneration(latestVersionBlob.generation ?: 1L)
-                        .setTimestamp(latestVersion.timestamp)
-                        .build()
-                buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
-            } else emptyList<FileVersionInfo>()
-
             val actualText = request.actualContent.toStringUtf8()
-            // Patches can be applied to this version
-            val patch = getDiffPatch(latestVersion.content.toStringUtf8(), actualText, request.timestamp)
-            val versionToCommit = CosmasProto.FileVersion.newBuilder()
-                    .addPatches(patch)
-                    .addAllHistoryWindow(windowToCommit)
-                    .build()
 
-            project[request.fileId] = versionToCommit
+            val patch = getDiffPatch(versionToCommit.content.toStringUtf8(), actualText, request.timestamp)
+            project[request.fileId] = versionToCommit.toBuilder().addPatches(patch).build()
 
             // Committing correct version from buffer to GCS
             commitFromMemoryToGCS(request.info, request.fileId, actualText)
@@ -479,6 +450,41 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
+    }
+
+    fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo,
+                               project: ConcurrentMap<String, CosmasProto.FileVersion>): FileVersion {
+        synchronized(project) {
+            // Getting last version from storage or default instance if it doesn't exist
+            val latestVersionBlob: Blob? = this.storage.get(getBlobId(fileId, projectInfo))
+            val latestVersion = if (latestVersionBlob != null) {
+                CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
+            } else {
+                val fileVersion = FileVersion.getDefaultInstance()
+                project[fileId] = fileVersion
+                return fileVersion
+            }
+
+            // Preparing new version in memory to replace bad or nonexistent one in buffer
+            // Window should point to the latest N versions
+            val latestVersionInfo = FileVersionInfo.newBuilder()
+                    .setFileId(fileId)
+                    // For in-memory storage implementation resultBlob.generation == null,
+                    // but in this case we don't care about generation value, so I set it to 1L
+                    .setGeneration(latestVersionBlob.generation ?: 1L)
+                    .setTimestamp(latestVersion.timestamp)
+                    .build()
+            val windowToCommit = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
+
+            // Content should be equal to content of the latest version
+            val versionToCommit = CosmasProto.FileVersion.newBuilder()
+                    .setContent(latestVersion.content)
+                    .addAllHistoryWindow(windowToCommit)
+                    .build()
+
+            project[fileId] = versionToCommit
+            return versionToCommit
+        }
     }
 
     override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
@@ -519,10 +525,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         if (project != null) {
             synchronized(project) {
                 for (change in request.changesList) {
-                    if (project.contains(change.oldFileId)) {
-                        project[change.newFileId] = project[change.oldFileId]
-                        project.remove(change.oldFileId)
+                    if (!project.contains(change.oldFileId)) {
+                        restoreFileFromStorage(change.oldFileId, request.info, project)
                     }
+                    project[change.newFileId] = project[change.oldFileId]
+                    project.remove(change.oldFileId)
                 }
             }
         }

@@ -304,7 +304,7 @@ class CosmasGoogleCloudServiceTest {
     fun forcedCommitBetweenCommits() {
         val fakeStorage: Storage = mock(Storage::class.java)
         val blob1 = getMockedBlob("ver1", 0)
-        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo())))).thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo())))).thenReturn(null).thenReturn(blob1)
 
         Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 any(ByteArray::class.java))).thenReturn(blob1)
@@ -327,7 +327,7 @@ class CosmasGoogleCloudServiceTest {
                 eq(ver1.toByteArray()))
         verify(fakeStorage).create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 eq(ver2.toByteArray()))
-        verify(fakeStorage).get(eq(service.getBlobId(FILE_ID, projectInfo())))
+        verify(fakeStorage, times(2)).get(eq(service.getBlobId(FILE_ID, projectInfo())))
     }
 
     @Test
@@ -844,7 +844,7 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(blob1)
 
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo()))))
-                .thenReturn(blob1)
+                .thenReturn(null).thenReturn(blob1)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
                 .thenReturn(blob2)
 
