@@ -278,8 +278,12 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     }
 
     private fun getFileVersionListFromMemory(projectInfo: ProjectInfo, fileId: String): List<FileVersionInfo> {
-        return this.fileBuffer[projectInfo.projectId]?.get(fileId)?.historyWindowList
-                ?: emptyList()
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getOrPut(projectInfo.projectId) { ConcurrentHashMap() }
+        }
+        val fileVersion = this.fileBuffer[projectInfo.projectId]?.get(fileId)
+                ?: restoreFileFromStorage(fileId, projectInfo, project)
+        return fileVersion.historyWindowList
     }
 
     private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, fileId: String,
@@ -477,13 +481,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             val windowToCommit = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
 
             // Content should be equal to content of the latest version
-            val versionToCommit = CosmasProto.FileVersion.newBuilder()
+            val bufferVersion = CosmasProto.FileVersion.newBuilder()
                     .setContent(latestVersion.content)
                     .addAllHistoryWindow(windowToCommit)
                     .build()
 
-            project[fileId] = versionToCommit
-            return versionToCommit
+            project[fileId] = bufferVersion
+            return bufferVersion
         }
     }
 
