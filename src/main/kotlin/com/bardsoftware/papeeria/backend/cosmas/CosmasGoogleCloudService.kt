@@ -105,7 +105,12 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
         synchronized(project) {
-            val fileVersion = project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
+            val fileVersion = try {
+                project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return
+            }
             project[request.fileId] = fileVersion.toBuilder()
                     .addAllPatches(request.patchesList)
                     .build()
