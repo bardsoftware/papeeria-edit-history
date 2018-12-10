@@ -34,6 +34,7 @@ import org.mockito.Matchers.any
 import org.mockito.Matchers.eq
 import org.mockito.Mockito
 import org.mockito.Mockito.*
+import java.io.IOException
 import java.time.Clock
 
 
@@ -255,7 +256,8 @@ class CosmasGoogleCloudServiceTest {
         val blob2 = getMockedBlob("ver2", 1)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 0)))).thenReturn(blob1)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1)))).thenReturn(blob2)
-        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null)))).thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null))))
+                .thenReturn(null).thenReturn(blob2)
         Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
                 any(ByteArray::class.java))).thenReturn(blob1).thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
@@ -334,7 +336,7 @@ class CosmasGoogleCloudServiceTest {
     fun failedCommitBecauseOfBadPatch() {
         val patch = newPatch(USER_ID, "kek", 1)
         addPatchToService(patch)
-        val badFiles = commit()
+        val badFiles = commit(checkBadFiles = false)
         val expected = FileInfo.newBuilder()
                 .setProjectId(PROJECT_ID)
                 .setFileId(FILE_ID)
@@ -346,7 +348,7 @@ class CosmasGoogleCloudServiceTest {
     fun failedCommitBecauseOfWrongHash() {
         val patch = diffPatch(USER_ID, "", "lol", 1, "it's not a hash")
         addPatchToService(patch)
-        val badFiles = commit()
+        val badFiles = commit(checkBadFiles = false)
         val expected = FileInfo.newBuilder()
                 .setProjectId(PROJECT_ID)
                 .setFileId(FILE_ID)
@@ -1154,17 +1156,20 @@ class CosmasGoogleCloudServiceTest {
         return Pair(commitRecorder, commitRequest)
     }
 
-    private fun commit(projectId: String = PROJECT_ID): MutableList<FileInfo> {
-        val (commitRecorder, commitRequest) =
-                getStreamRecorderAndRequestForCommitVersions(projectInfo(projectId))
-        this.service.commitVersion(commitRequest, commitRecorder)
-        return commitRecorder.values[0].badFilesList
+    private fun commit(projectId: String = PROJECT_ID, checkBadFiles: Boolean = true): MutableList<FileInfo> {
+        return commit(projectInfo(projectId), checkBadFiles)
     }
 
-    private fun commit(info: ProjectInfo): MutableList<FileInfo> {
+    private fun commit(info: ProjectInfo, checkBadFiles: Boolean = true): MutableList<FileInfo> {
         val (commitRecorder, commitRequest) =
                 getStreamRecorderAndRequestForCommitVersions(info)
         this.service.commitVersion(commitRequest, commitRecorder)
+        val maybeError = commitRecorder.error
+        if (maybeError != null)
+            throw maybeError
+        if (checkBadFiles && commitRecorder.values[0].badFilesList.size != 0) {
+            throw IOException("Error while committing file")
+        }
         return commitRecorder.values[0].badFilesList
     }
 
