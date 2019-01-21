@@ -469,10 +469,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             val latestVersion = if (latestVersionBlob != null) {
                 CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
             } else {
-                val fileVersion = FileVersion.getDefaultInstance()
-                project[fileId] = fileVersion
-                return fileVersion
+                val bufferVersion = FileVersion.getDefaultInstance()
+                project[fileId] = bufferVersion
+                return bufferVersion
             }
+            LOG.info("Restoring from GCS to buffer file={}", fileId)
 
             // Preparing new version in memory to replace bad or nonexistent one in buffer
             // Window should point to the latest N versions
@@ -483,12 +484,12 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                     .setGeneration(latestVersionBlob.generation ?: 1L)
                     .setTimestamp(latestVersion.timestamp)
                     .build()
-            val windowToCommit = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
+            val bufferWindow = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
 
             // Content should be equal to content of the latest version
             val bufferVersion = CosmasProto.FileVersion.newBuilder()
                     .setContent(latestVersion.content)
-                    .addAllHistoryWindow(windowToCommit)
+                    .addAllHistoryWindow(bufferWindow)
                     .build()
 
             project[fileId] = bufferVersion
@@ -530,7 +531,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) {
         LOG.info("Get request for change files ids in project={}", request.info.projectId)
 
-        val project = this.fileBuffer[request.info.projectId]
+        val project = synchronized(this.fileBuffer) {
+            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
+        }
         if (project != null) {
             synchronized(project) {
                 for (change in request.changesList) {
