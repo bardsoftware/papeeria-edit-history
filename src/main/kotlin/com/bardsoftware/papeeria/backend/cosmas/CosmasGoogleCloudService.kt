@@ -129,7 +129,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val project = this.fileBuffer[request.info.projectId]
         if (project == null) {
             val errorStatus = Status.INVALID_ARGUMENT.withDescription(
-                    "There is no project in buffer with project id ${request.info.projectId}")
+                    "There is no project in buffer with project=${request.info.projectId}")
             LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
             return
@@ -241,7 +241,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         val response = CosmasProto.GetVersionResponse.newBuilder()
         if (blob == null) {
             val errorStatus = Status.NOT_FOUND.withDescription(
-                    "There is no such file or file version in storage")
+                    "There is no such file=${request.fileId} or file version in storage")
             LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
             return
@@ -264,9 +264,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
         if (versionList.isEmpty()) {
             val description = if (request.startGeneration != -1L) {
-                "There is no file in storage with file id ${request.fileId}"
+                "There is no file=${request.fileId} in storage"
             } else {
-                "There is no versions of file with id ${request.fileId} before generation ${request.startGeneration}"
+                "There is no versions of file=${request.fileId} before generation=${request.startGeneration}"
             }
             val errorStatus = Status.NOT_FOUND.withDescription(description)
             LOG.error(description)
