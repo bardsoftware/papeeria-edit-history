@@ -263,9 +263,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             return
         }
         if (versionList.isEmpty()) {
-            val errorStatus = Status.NOT_FOUND.withDescription(
-                    "There is no file in storage with file id ${request.fileId}")
-            LOG.error(errorStatus.description)
+            val description = if (request.startGeneration != -1L) {
+                "There is no file in storage with file id ${request.fileId}"
+            } else {
+                "There is no versions of file with id ${request.fileId} before generation ${request.startGeneration}"
+            }
+            val errorStatus = Status.NOT_FOUND.withDescription(description)
+            LOG.error(description)
             responseObserver.onError(StatusException(errorStatus))
             return
         }
@@ -462,7 +466,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     }
 
     private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo,
-                               project: ConcurrentMap<String, CosmasProto.FileVersion>): FileVersion {
+                                       project: ConcurrentMap<String, CosmasProto.FileVersion>): FileVersion {
         synchronized(project) {
             // Getting last version from storage or default instance if it doesn't exist
             val latestVersionBlob: Blob = this.storage.get(getBlobId(fileId, projectInfo))
