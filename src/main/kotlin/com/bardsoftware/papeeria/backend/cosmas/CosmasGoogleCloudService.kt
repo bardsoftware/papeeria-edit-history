@@ -461,18 +461,13 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         responseObserver.onCompleted()
     }
 
-    fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo,
+    private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo,
                                project: ConcurrentMap<String, CosmasProto.FileVersion>): FileVersion {
         synchronized(project) {
             // Getting last version from storage or default instance if it doesn't exist
-            val latestVersionBlob: Blob? = this.storage.get(getBlobId(fileId, projectInfo))
-            val latestVersion = if (latestVersionBlob != null) {
-                CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
-            } else {
-                val bufferVersion = FileVersion.getDefaultInstance()
-                project[fileId] = bufferVersion
-                return bufferVersion
-            }
+            val latestVersionBlob: Blob = this.storage.get(getBlobId(fileId, projectInfo))
+                    ?: return FileVersion.getDefaultInstance()
+            val latestVersion = CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
             LOG.info("Restoring from GCS to buffer file={}", fileId)
 
             // Preparing new version in memory to replace bad or nonexistent one in buffer
@@ -487,13 +482,10 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             val bufferWindow = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
 
             // Content should be equal to content of the latest version
-            val bufferVersion = CosmasProto.FileVersion.newBuilder()
+            return FileVersion.newBuilder()
                     .setContent(latestVersion.content)
                     .addAllHistoryWindow(bufferWindow)
                     .build()
-
-            project[fileId] = bufferVersion
-            return bufferVersion
         }
     }
 
@@ -537,10 +529,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         if (project != null) {
             synchronized(project) {
                 for (change in request.changesList) {
-                    if (!project.contains(change.oldFileId)) {
-                        restoreFileFromStorage(change.oldFileId, request.info, project)
-                    }
-                    project[change.newFileId] = project[change.oldFileId]
+                    val oldVersion = project[change.oldFileId]
+                            ?: restoreFileFromStorage(change.oldFileId, request.info, project)
+                    project[change.newFileId] = oldVersion
                     project.remove(change.oldFileId)
                 }
             }
