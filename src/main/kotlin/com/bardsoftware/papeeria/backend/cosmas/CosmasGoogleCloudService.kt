@@ -263,7 +263,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             return
         }
         if (versionList.isEmpty()) {
-            val description = if (request.startGeneration != -1L) {
+            val description = if (request.startGeneration == -1L) {
                 "There is no file=${request.fileId} in storage"
             } else {
                 "There is no versions of file=${request.fileId} before generation=${request.startGeneration}"
