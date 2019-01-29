@@ -1,10 +1,3 @@
-group 'com.bardsoftware.papeeria.backend.cosmas'
-version '1.0-SNAPSHOT'
-apply plugin: 'kotlin'
-apply plugin: 'com.google.protobuf'
-apply plugin: 'idea'
-apply plugin: 'application'
-
 buildscript {
     ext.kotlin_version = '1.2.31'
 
@@ -17,6 +10,23 @@ buildscript {
         classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.+'
     }
 }
+
+plugins {
+    id 'com.google.cloud.tools.jib' version '1.0.0'
+}
+
+apply plugin: 'kotlin'
+apply plugin: 'com.google.protobuf'
+apply plugin: 'idea'
+apply plugin: 'application'
+
+
+group 'com.bardsoftware.papeeria.backend.cosmas'
+version '1.0-SNAPSHOT'
+
+
+jib.to.image = 'eu.gcr.io/ganttproject.biz/api-project-620082121657/cosmas:dev'
+
 
 sourceSets {
     main {
