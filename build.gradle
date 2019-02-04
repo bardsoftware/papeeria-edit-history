@@ -100,3 +100,26 @@ test {
         showStandardStreams = true
     }
 }
+
+task genProdKeys(type: Exec) {
+    commandLine "openssl", "req",
+        "-x509",
+        "-newkey", "rsa:4096",
+        "-keyout", "prod_cosmas_key.pem",
+        "-out", "prod_cosmas_cert.pem",
+        "-days", "3650",
+        "-nodes",
+        "-subj",
+        "/C=CZ/ST=/L=Prague/O=BarD Software s.r.o/CN=cosmas.prod.papeeria.com"
+}
+task genDevKeys(type: Exec) {
+    commandLine "openssl", "req",
+            "-x509",
+            "-newkey", "rsa:4096",
+            "-keyout", "dev_cosmas_key.pem",
+            "-out", "dev_cosmas_cert.pem",
+            "-days", "3650",
+            "-nodes",
+            "-subj",
+            "/C=CZ/ST=/L=Prague/O=BarD Software s.r.o/CN=cosmas.dev.papeeria.com"
+}
