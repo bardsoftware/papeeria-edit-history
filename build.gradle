@@ -24,10 +24,6 @@ apply plugin: 'application'
 group 'com.bardsoftware.papeeria.backend.cosmas'
 version '1.0-SNAPSHOT'
 
-
-jib.to.image = 'eu.gcr.io/ganttproject.biz/api-project-620082121657/cosmas:dev'
-
-
 sourceSets {
     main {
         java {
