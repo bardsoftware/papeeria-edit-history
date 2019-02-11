@@ -2,19 +2,20 @@
 <configuration debug="true" scan="true">
 
     <property name="COSMAS_LOG" value="/var/log/cosmas" />
+    <property name="COSMAS_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %X{funName}: projectId=%X{projectId} fileId=%X{fileId} userId=%X{userId} %msg%n" />
     
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
-        </encoder>
+        <layout>
+            <pattern>${COSMAS_PATTERN}</pattern>
+        </layout>
     </appender>
 
 	<appender name="FILE"
 		class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<file>${COSMAS_LOG}/cosmas.log</file>
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
-        </encoder>
+        <layout>
+            <pattern>${COSMAS_PATTERN}</pattern>
+        </layout>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
 			<!-- rollover daily -->
