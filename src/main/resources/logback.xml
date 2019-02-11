@@ -18,15 +18,19 @@
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
 			<!-- rollover daily -->
-			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log</fileNamePattern>
+			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log.zip</fileNamePattern>
             <maxHistory>24</maxHistory>
 		</rollingPolicy>
         
 	</appender>
 
-	<root level="debug">
+    <logger name="CosmasGoogleCloudService" level="debug">
+		<appender-ref ref="FILE" />
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="CosmasServer" level="debug">
 		<appender-ref ref="FILE" />
         <appender-ref ref="STDOUT" /> 
-	</root>
+    </logger>
 
 </configuration>

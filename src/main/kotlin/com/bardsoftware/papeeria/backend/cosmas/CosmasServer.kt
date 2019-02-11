@@ -70,7 +70,6 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 
 
 fun main(args: Array<String>) = mainBody {
-    val LOG = LoggerFactory.getLogger("server main")
     val parser = ArgParser(args)
     val arg = CosmasServerArgs(parser)
     LOG.info("Try to bind in port ${arg.port}")
