@@ -1,15 +1,32 @@
-<?xml version="1.0" encoding="UTF-8"?>
 
-<configuration>
+<configuration debug="true" scan="true">
 
+    <property name="COSMAS_LOG" value="/var/log/cosmas" />
+    
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="info">
-        <appender-ref ref="STDOUT"/>
-    </root>
+	<appender name="FILE"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${COSMAS_LOG}/cosmas.log</file>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- rollover daily -->
+			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log</fileNamePattern>
+            <maxHistory>24</maxHistory>
+		</rollingPolicy>
+        
+	</appender>
+
+	<root level="debug">
+		<appender-ref ref="FILE" />
+        <appender-ref ref="STDOUT" /> 
+	</root>
 
 </configuration>
