@@ -2,6 +2,8 @@
 <configuration debug="true" scan="true">
 
     <property name="COSMAS_LOG" value="/var/log/cosmas" />
+    <!-- This will take the value of %X (which is MDC), insert it into [] and replace it
+    with empty string if it turns out to be exactly [] (that is, MDC was empty) -->
     <variable scope="context" name="mdcValues" value="%replace([%X]){'\\[\\]', ''}"/>
     <property name="COSMAS_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] [%level{5}] [%logger{50}] %msg ${mdcValues}%n" />
 
@@ -19,7 +21,7 @@
         </layout>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-			<!-- rollover daily -->
+			<!-- rollover hourly -->
 			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log.zip</fileNamePattern>
             <maxHistory>24</maxHistory>
 		</rollingPolicy>
