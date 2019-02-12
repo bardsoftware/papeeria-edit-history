@@ -91,72 +91,62 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
     }
 
-    private fun cleanUpLog() {
-        MDC.remove("funName")
-        MDC.remove("projectId")
-        MDC.remove("fileId")
-        MDC.remove("userId")
-    }
-
-    private fun putMVC(funName: String, projectId: String, fileId: String, userId: String) {
-        MDC.put("funName", funName)
+    private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "", other: Map<String, String> = mapOf(), body: () -> Unit) {
         MDC.put("projectId", projectId)
         MDC.put("fileId", fileId)
         MDC.put("userId", userId)
-    }
-
-    private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "", body: () -> Unit) {
-        putMVC(funName, projectId, fileId, userId)
+        other.entries.forEach { MDC.put(it.key, it.value) }
+        LOG.info(">>> $funName")
+        MDC.clear()
         try {
             body()
         } finally {
-            cleanUpLog()
+            MDC.clear()
+            LOG.info("<<< $funName")
         }
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
-                             responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) = logging(
-            "createPatch", request.info.projectId, request.fileId) {
+                             responseObserver: StreamObserver<CosmasProto.CreatePatchResponse>) {
         if (request.patchesList.isEmpty()) {
-            LOG.info("")
-            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
-                    "Patches list at request is empty")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
-            return@logging
-        }
-        putMVC("createPatch", request.info.projectId, request.fileId, request.patchesList.first().userId)
-        LOG.info("")
-        val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
-        }
-        synchronized(project) {
-            val fileVersion = try {
-                project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
-            } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return@logging
+            return logging("createPatch", request.info.projectId, request.fileId) {
+                val errorStatus = Status.INVALID_ARGUMENT.withDescription(
+                    "No patches found in the request object")
+                LOG.error(errorStatus.description)
+                responseObserver.onError(StatusException(errorStatus))
             }
-            project[request.fileId] = fileVersion.toBuilder()
+        }
+        logging("createPatch", request.info.projectId, request.fileId, request.patchesList.first().userId) {
+            val project = synchronized(this.fileBuffer) {
+                this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
+            }
+            synchronized(project) {
+                val fileVersion = try {
+                    project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
+                } catch (e: StorageException) {
+                    handleStorageException(e, responseObserver)
+                    return@logging
+                }
+                project[request.fileId] = fileVersion.toBuilder()
                     .addAllPatches(request.patchesList)
                     .build()
-        }
-        val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
+            }
+            val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                 .newBuilder()
                 .build()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
+            responseObserver.onNext(response)
+            responseObserver.onCompleted()
+        }
     }
 
 
     override fun commitVersion(request: CosmasProto.CommitVersionRequest,
                                responseObserver: StreamObserver<CosmasProto.CommitVersionResponse>) = logging(
             "commitVersion", request.info.projectId) {
-        LOG.info("")
         val project = this.fileBuffer[request.info.projectId]
         if (project == null) {
             val errorStatus = Status.INVALID_ARGUMENT.withDescription(
-                    "There is no such project in buffer")
+                    "No such project in the buffer")
             LOG.error(errorStatus.description)
             responseObserver.onError(StatusException(errorStatus))
             return@logging
@@ -167,7 +157,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             try {
                 for ((fileId, fileVersion) in project) {
                     try {
-                        putMVC("commitVersion", request.info.projectId, fileId, "")
+                        MDC.clear()
+                        MDC.put("fileId", fileId)
                         val text = fileVersion.content.toStringUtf8()
                         val patches = fileVersion.patchesList.toMutableList()
                         if (patches.isEmpty()) {
@@ -184,7 +175,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                             LOG.info("File has been committed")
                         } else {
                             val actualHash = patches.last().actualHash
-                            LOG.error("Commit failure: File has Cosmas hash={}, but last actual hash={}",
+                            LOG.error("""Commit failure: hash mismatch.
+                              |Hash after applying patches={}. Last hash supplied by client={}.
+                              |This means that the sequence of patches produces something different than actual file contents.""".trimMargin(),
                                     cosmasHash, actualHash)
                             val badFile = CosmasProto.FileInfo.newBuilder()
                                     .setFileId(fileId)
@@ -193,7 +186,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
                             response.addBadFiles(badFile)
                         }
                     } catch (e: Throwable) {
-                        LOG.error("Error while applying patches")
+                        LOG.error("Error while applying patches", e)
                         when (e) {
                             is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
                                 val badFile = CosmasProto.FileInfo.newBuilder()
@@ -252,13 +245,11 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) = logging(
-            "getVersion", request.info.projectId, request.fileId) {
+            "getVersion", request.info.projectId, request.fileId, other = mapOf("generation" to request.generation.toString())) {
         // if request.generation is -1, Cosmas will return the latest version of file
         val generation = if (request.generation == -1L) {
-            LOG.info("The latest version")
             null // In GCS if generation is null it returns the latest version
         } else {
-            LOG.info("generation={}", request.generation)
             request.generation
         }
 
@@ -283,8 +274,8 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     override fun fileVersionList(request: CosmasProto.FileVersionListRequest,
                                  responseObserver: StreamObserver<CosmasProto.FileVersionListResponse>) = logging(
-            "fileVersionList", request.info.projectId, request.fileId) {
-        LOG.info("")
+            "fileVersionList", request.info.projectId, request.fileId,
+        other = mapOf("generation" to request.startGeneration.toString())) {
 
         val response = CosmasProto.FileVersionListResponse.newBuilder()
         val versionList = try {
@@ -294,11 +285,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             return@logging
         }
         if (versionList.isEmpty()) {
-            val description = if (request.startGeneration == -1L) {
-                "There is no file in storage"
-            } else {
-                "There is no versions of file before generation=${request.startGeneration}"
-            }
+            val description = "No versions found"
             val errorStatus = Status.NOT_FOUND.withDescription(description)
             LOG.error(description)
             responseObserver.onError(StatusException(errorStatus))
@@ -363,62 +350,65 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
 
     override fun deletePatch(request: CosmasProto.DeletePatchRequest,
-                             responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) = logging(
-            "deletePatch", request.info.projectId, request.fileId) {
-        LOG.info("generation={}", request.generation)
-        // Timestamp of file version witch contains patch
-        val versionTimestamp = FileVersion.parseFrom(
+                             responseObserver: StreamObserver<CosmasProto.DeletePatchResponse>) {
+        logging("deletePatch", request.info.projectId, request.fileId,
+            other = mapOf(
+                "generation" to request.generation.toString(),
+                "patchTimestamp" to request.patchTimestamp.toString()
+            )) {
+            // Timestamp of file version witch contains patch
+            val versionTimestamp = FileVersion.parseFrom(
                 this.storage.get(getBlobId(request.fileId, request.info, request.generation)).getContent()).timestamp
-        // Text of version from which patch was applied (version before version witch contains patch)
-        val (patchList, text) = try {
-            getPatchListAndPreviousText(fileStorageName(request.fileId, request.info), versionTimestamp, request.info)
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-        var indexCandidateDeletePatch = -1
-        for ((patchIndex, patch) in patchList.iterator().withIndex()) {
-            if (patch.timestamp == request.patchTimestamp) {
-                indexCandidateDeletePatch = patchIndex
-                break
+            // Text of version from which patch was applied (version before version witch contains patch)
+            val (patchList, text) = try {
+                getPatchListAndPreviousText(fileStorageName(request.fileId, request.info), versionTimestamp, request.info)
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return@logging
             }
-        }
-        if (indexCandidateDeletePatch == -1) {
-            val errorStatus = Status.NOT_FOUND.withDescription(
-                    "There is no such patch in storage")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
-            return@logging
-        }
-        val textWithoutPatch: String
-        try {
-            val textBeforeCandidateDelete = PatchCorrector.applyPatch(
+            var indexCandidateDeletePatch = -1
+            for ((patchIndex, patch) in patchList.iterator().withIndex()) {
+                if (patch.timestamp == request.patchTimestamp) {
+                    indexCandidateDeletePatch = patchIndex
+                    break
+                }
+            }
+            if (indexCandidateDeletePatch == -1) {
+                val errorStatus = Status.NOT_FOUND.withDescription(
+                    "No patch found")
+                LOG.error(errorStatus.description)
+                responseObserver.onError(StatusException(errorStatus))
+                return@logging
+            }
+            val textWithoutPatch: String
+            try {
+                val textBeforeCandidateDelete = PatchCorrector.applyPatch(
                     patchList.subList(0, indexCandidateDeletePatch), text)
-            val finishText = CosmasProto.FileVersion.parseFrom(
+                val finishText = CosmasProto.FileVersion.parseFrom(
                     this.storage.get(getBlobId(request.fileId, request.info)).getContent()).content.toStringUtf8()
-            textWithoutPatch = PatchCorrector.applyPatch(
+                textWithoutPatch = PatchCorrector.applyPatch(
                     PatchCorrector.deletePatch(
-                            patchList[indexCandidateDeletePatch],
-                            patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
-                            textBeforeCandidateDelete),
+                        patchList[indexCandidateDeletePatch],
+                        patchList.subList(indexCandidateDeletePatch + 1, patchList.size),
+                        textBeforeCandidateDelete),
                     finishText)
-        } catch (e: PatchCorrector.ApplyPatchException) {
-            val errorStatus = Status.INTERNAL.withDescription(e.message)
+            } catch (e: PatchCorrector.ApplyPatchException) {
+                val errorStatus = Status.INTERNAL.withDescription(e.message)
                     .withDescription("Can't apply patch: ${e.message}")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
-            return@logging
+                LOG.error(errorStatus.description, e)
+                responseObserver.onError(StatusException(errorStatus))
+                return@logging
+            }
+            val response = CosmasProto.DeletePatchResponse.newBuilder()
+            response.content = ByteString.copyFromUtf8(textWithoutPatch)
+            responseObserver.onNext(response.build())
+            responseObserver.onCompleted()
         }
-        val response = CosmasProto.DeletePatchResponse.newBuilder()
-        response.content = ByteString.copyFromUtf8(textWithoutPatch)
-        responseObserver.onNext(response.build())
-        responseObserver.onCompleted()
     }
 
     override fun deleteFile(request: CosmasProto.DeleteFileRequest,
                             responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
-            "deleteFile", request.info.projectId, request.fileId) {
-        LOG.info("""fileName="{}"""", request.fileName)
+            "deleteFile", request.info.projectId, request.fileId, other = mapOf("fileName" to request.fileName)) {
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -426,15 +416,15 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             handleStorageException(e, responseObserver)
             return@logging
         }
-        val newTomb = CosmasProto.FileTomb.newBuilder()
+        val newTomb = FileTomb.newBuilder()
                 .setFileId(request.fileId)
                 .setFileName(request.fileName)
                 .setRemovalTimestamp(request.removalTimestamp)
                 .build()
         val cemetery = if (cemeteryBytes == null) {
-            CosmasProto.FileCemetery.newBuilder()
+            FileCemetery.newBuilder()
         } else {
-            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
         }
         try {
             this.storage.create(
@@ -445,7 +435,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             return@logging
         }
 
-        val response = CosmasProto.DeleteFileResponse.newBuilder().build()
+        val response = DeleteFileResponse.newBuilder().build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
@@ -453,7 +443,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun deletedFileList(request: CosmasProto.DeletedFileListRequest,
                                  responseObserver: StreamObserver<CosmasProto.DeletedFileListResponse>) = logging(
             "deletedFileList", request.info.projectId) {
-        LOG.info("")
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -475,7 +464,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) = logging(
             "forcedFileCommit", request.info.projectId, request.fileId) {
-        LOG.info("")
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
         }
@@ -563,7 +551,10 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     override fun changeFileId(request: CosmasProto.ChangeFileIdRequest,
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) = logging(
             "changeFileId", request.info.projectId) {
-        LOG.info("")
+        LOG.info("""Request:
+          |${request}
+        """.trimMargin())
+
 
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
@@ -641,15 +632,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     private fun handleStorageException(e: StorageException, responseObserver: StreamObserver<*>) {
         LOG.error("StorageException happened at Cosmas", e)
         responseObserver.onError(e)
-    }
-
-    fun deleteFile(fileId: String, info: ProjectInfo) {
-        LOG.info("Delete file={}", fileId)
-        try {
-            this.storage.delete(getBlobId(fileId, info))
-        } catch (e: StorageException) {
-            LOG.error("Deleting file failed at Cosmas", e)
-        }
     }
 
     fun getPatchList(projectId: String, fileId: String): List<CosmasProto.Patch>? {

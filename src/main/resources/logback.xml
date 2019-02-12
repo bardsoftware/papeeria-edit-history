@@ -2,8 +2,9 @@
 <configuration debug="true" scan="true">
 
     <property name="COSMAS_LOG" value="/var/log/cosmas" />
-    <property name="COSMAS_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %X{funName}: projectId=%X{projectId} fileId=%X{fileId} userId=%X{userId} %msg%n" />
-    
+    <variable scope="context" name="mdcValues" value="%replace([%X]){'\\[\\]', ''}"/>
+    <property name="COSMAS_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] [%level{5}] [%logger{50}] %msg ${mdcValues}%n" />
+
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <layout>
             <pattern>${COSMAS_PATTERN}</pattern>
@@ -22,7 +23,7 @@
 			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log.zip</fileNamePattern>
             <maxHistory>24</maxHistory>
 		</rollingPolicy>
-        
+
 	</appender>
 
     <logger name="CosmasGoogleCloudService" level="debug">
@@ -31,7 +32,7 @@
     </logger>
     <logger name="CosmasServer" level="debug">
 		<appender-ref ref="FILE" />
-        <appender-ref ref="STDOUT" /> 
+        <appender-ref ref="STDOUT" />
     </logger>
 
 </configuration>
