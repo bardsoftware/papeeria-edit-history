@@ -34,8 +34,8 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 
     constructor(port: Int, service: CosmasGrpc.CosmasImplBase,
                 certChain: File, privateKey: File) : this(port, service) {
-        Preconditions.checkState(certChain.exists(), "File with SSL certificate doesn't exists")
-        Preconditions.checkState(privateKey.exists(), "File with SSL key doesn't exists")
+        Preconditions.checkState(certChain.exists(), "SSL certificate file doesn't exists: %s", certChain)
+        Preconditions.checkState(privateKey.exists(), "SSL key file doesn't exists: %s", privateKey)
         this.server = ServerBuilder
                 .forPort(port)
                 .useTransportSecurity(certChain, privateKey)
@@ -72,7 +72,6 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 fun main(args: Array<String>) = mainBody {
     val parser = ArgParser(args)
     val arg = CosmasServerArgs(parser)
-    LOG.info("Try to bind in port ${arg.port}")
     val freeBucket = arg.freeBucket
     val paidBucket = arg.paidBucket
     val gsutilImageName = arg.gsutilImageName
@@ -83,18 +82,18 @@ fun main(args: Array<String>) = mainBody {
     }
     val server =
             if (arg.certChain != null && arg.privateKey != null) {
-                LOG.info("Starting Cosmas in secure mode(using SSL)")
+                LOG.info("Starting Cosmas in SECURE mode")
                 CosmasServer(arg.port,
                         CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
                         File(arg.certChain),
                         File(arg.privateKey))
             } else {
-                LOG.info("Starting Cosmas in non-secure mode")
+                LOG.info("Starting Cosmas in INSECURE mode")
                 CosmasServer(arg.port,
                         CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
             }
 
-    LOG.info("Start working in port ${arg.port}")
+    LOG.info("Listening on port ${arg.port}")
     server.start()
     server.blockUntilShutDown()
 }
