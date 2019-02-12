@@ -24,7 +24,7 @@ import io.grpc.StatusException
 import io.grpc.stub.StreamObserver
 import name.fraser.neil.plaintext.diff_match_patch
 import org.slf4j.LoggerFactory
-import org.slf4j.MDC;
+import org.slf4j.MDC
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
@@ -33,6 +33,28 @@ import kotlin.math.min
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
+
+private fun labels(entries: Map<String,String>) {
+    entries.forEach { if (it.value.isNotBlank()) MDC.put(it.key, it.value) }
+}
+
+private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "", other: Map<String, String> = mapOf(), body: () -> Unit) {
+    labels(mapOf(
+        "projectId" to projectId,
+        "fileId" to fileId,
+        "userId" to  userId
+    ))
+    labels(other)
+    LOG.info(">>> $funName")
+    MDC.clear()
+    try {
+        body()
+    } finally {
+        MDC.clear()
+        LOG.info("<<< $funName")
+    }
+}
+
 
 /**
  * Special class that can work with requests from CosmasClient
@@ -89,21 +111,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
 
     fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
         return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
-    }
-
-    private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "", other: Map<String, String> = mapOf(), body: () -> Unit) {
-        MDC.put("projectId", projectId)
-        MDC.put("fileId", fileId)
-        MDC.put("userId", userId)
-        other.entries.forEach { MDC.put(it.key, it.value) }
-        LOG.info(">>> $funName")
-        MDC.clear()
-        try {
-            body()
-        } finally {
-            MDC.clear()
-            LOG.info("<<< $funName")
-        }
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
