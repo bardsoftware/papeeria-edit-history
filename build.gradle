@@ -124,4 +124,10 @@ jib {
     from {
         image = 'gcr.io/distroless/java:debug'
     }
+    extraDirectory {
+        permissions = [
+                '/var/log/cosmas': '777',
+                '/var/log/cosmas/cosmas.log': '666' 
+        ]
+    }
 }
