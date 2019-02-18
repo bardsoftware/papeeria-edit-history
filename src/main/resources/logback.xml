@@ -1,15 +1,40 @@
-<?xml version="1.0" encoding="UTF-8"?>
 
-<configuration>
+<configuration debug="true" scan="true">
+
+    <property name="COSMAS_LOG" value="/var/log/cosmas" />
+    <!-- This will take the value of %X (which is MDC), insert it into [] and replace it
+    with empty string if it turns out to be exactly [] (that is, MDC was empty) -->
+    <variable scope="context" name="mdcValues" value="%replace([%X]){'\\[\\]', ''}"/>
+    <property name="COSMAS_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] [%level{5}] [%logger{50}] %msg ${mdcValues}%n" />
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
-        </encoder>
+        <layout>
+            <pattern>${COSMAS_PATTERN}</pattern>
+        </layout>
     </appender>
 
-    <root level="info">
-        <appender-ref ref="STDOUT"/>
-    </root>
+	<appender name="FILE"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${COSMAS_LOG}/cosmas.log</file>
+        <layout>
+            <pattern>${COSMAS_PATTERN}</pattern>
+        </layout>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- rollover hourly -->
+			<fileNamePattern>${COSMAS_LOG}/archived/cosmas.%d{yyyy-MM-dd:HH}.log.zip</fileNamePattern>
+            <maxHistory>24</maxHistory>
+		</rollingPolicy>
+
+	</appender>
+
+    <logger name="CosmasGoogleCloudService" level="debug">
+		<appender-ref ref="FILE" />
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="CosmasServer" level="debug">
+		<appender-ref ref="FILE" />
+        <appender-ref ref="STDOUT" />
+    </logger>
 
 </configuration>
