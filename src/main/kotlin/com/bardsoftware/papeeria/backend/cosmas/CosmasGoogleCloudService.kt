@@ -152,10 +152,9 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             "commitVersion", request.info.projectId) {
         val project = this.fileBuffer[request.info.projectId]
         if (project == null) {
-            val errorStatus = Status.INVALID_ARGUMENT.withDescription(
-                    "No such project in the buffer")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
+            LOG.info("No such project in the buffer")
+            responseObserver.onNext(CosmasProto.CommitVersionResponse.getDefaultInstance())
+            responseObserver.onCompleted()
             return@logging
         }
 
