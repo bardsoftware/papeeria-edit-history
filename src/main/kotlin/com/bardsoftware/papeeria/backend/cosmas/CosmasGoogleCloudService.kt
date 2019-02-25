@@ -297,7 +297,17 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             responseObserver.onError(StatusException(errorStatus))
             return@logging
         }
-        response.addAllVersions(versionList)
+        val actualVersionList = mutableListOf<FileVersionInfo>()
+        for (version in versionList) {
+            // checking that files from window really exist - storage.get doesn't load all file content
+            val blob = this.storage.get(getBlobId(version.fileId, request.info, version.generation))
+            if (blob != null) {
+                actualVersionList.add(version)
+            } else {
+                break
+            }
+        }
+        response.addAllVersions(actualVersionList)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }

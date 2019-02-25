@@ -145,6 +145,9 @@ class CosmasGoogleCloudServiceTest {
         val blob1 = getMockedBlob("ver1", 0)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null))))
                 .thenReturn(blob1)
+
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 0))))
+                .thenReturn(blob1)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         assertEquals(listOf(0L), getVersionsList(FILE_ID, PROJECT_ID))
     }
@@ -157,6 +160,10 @@ class CosmasGoogleCloudServiceTest {
                 .addHistoryWindow(createFileVersionInfo(0L))
                 .build(), 1L)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null))))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 0))))
                 .thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         assertEquals(listOf(1L, 0L), getVersionsList(FILE_ID, PROJECT_ID))
@@ -1067,7 +1074,7 @@ class CosmasGoogleCloudServiceTest {
                 getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
-    private fun addManyVersions(count: Long, windowMaxSize: Int) {
+    private fun addManyVersions(count: Long, windowMaxSize: Int): Storage {
         val fakeStorage: Storage = mock(Storage::class.java)
 
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock(), windowMaxSize = windowMaxSize)
@@ -1099,6 +1106,25 @@ class CosmasGoogleCloudServiceTest {
             addPatchToService(patch)
             commit()
         }
+        return fakeStorage
+    }
+
+    @Test
+    fun versionsNotExistFromMemory() {
+        val fakeStorage = addManyVersions(4, 5)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
+                .thenReturn(null)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(null)
+        assertEquals(listOf(4L, 3L), getVersionsList(FILE_ID, PROJECT_ID))
+    }
+
+    @Test
+    fun versionsNotExistFromStorage() {
+        val fakeStorage = addManyVersions(4, 2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(null)
+        assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
     @Test
