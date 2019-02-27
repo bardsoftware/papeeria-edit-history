@@ -1,0 +1,3 @@
+rootProject.name = 'libcosmas'
+rootProject.buildFileName = "libcosmas.gradle"
+

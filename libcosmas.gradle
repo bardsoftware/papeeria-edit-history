@@ -1,0 +1,75 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.+'
+    }
+}
+
+plugins {
+    id 'maven-publish'
+}
+
+apply plugin: 'com.google.protobuf'
+apply plugin: 'java'
+
+group = 'com.bardsoftware.papeeria'
+version = new Date().format("yyyy.MM.dd")
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'generated/source/proto/main/java',
+                    'generated/source/proto/main/grpc'
+        }
+    }
+}
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    compile 'com.google.protobuf:protobuf-java:3.+'
+    compile 'io.grpc:grpc-stub:1.+'
+    compile 'io.grpc:grpc-protobuf:1.+'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.+'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.+'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+if (!hasProperty("mavenRepo")) {
+    throw new Exception("\n\n==== Please specify maven repository URL using -PmavenRepo=... command line flag ====\n\n")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+
+    }
+    repositories {
+        maven {
+            url = "${mavenRepo}"
+        }
+    }
+}
