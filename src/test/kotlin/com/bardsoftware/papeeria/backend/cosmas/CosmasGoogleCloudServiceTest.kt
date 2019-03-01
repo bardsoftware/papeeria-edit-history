@@ -1113,43 +1113,51 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromMemory() {
-        val month = 24 * 60 * 60 * 1000
+        val day = 24 * 60 * 60 * 1000
         val clock = mock(Clock::class.java)
         Mockito.`when`(clock.millis())
                 .thenReturn(0L)
                 .thenReturn(1L)
-                .thenReturn(month + 1L)
-                .thenReturn(month + 2L)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
                 .thenReturn(0L)
                 .thenReturn(1L)
-                .thenReturn(month + 1L)
-                .thenReturn(month + 2L)
-                .thenReturn(month + 3L)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+
         val fakeStorage = addManyVersions(4, 5, clock)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
                 .thenReturn(null)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
                 .thenReturn(null)
+
+        Mockito.`when`(clock.millis())
+                .thenReturn(day + 3L)
+
         assertEquals(listOf(4L, 3L), getVersionsList(FILE_ID, PROJECT_ID))
     }
 
     @Test
     fun versionsNotExistFromStorage() {
-        val month: Long = 24 * 60 * 60 * 1000
+        val day: Long = 24 * 60 * 60 * 1000
         val clock = mock(Clock::class.java)
         Mockito.`when`(clock.millis())
                 .thenReturn(0L)
-                .thenReturn(month)
-                .thenReturn(month + 1L)
-                .thenReturn(month + 2L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
                 .thenReturn(0L)
-                .thenReturn(month)
-                .thenReturn(month + 1L)
-                .thenReturn(month + 2L)
-                .thenReturn(month + 3L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+
         val fakeStorage = addManyVersions(4, 2, clock)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
                 .thenReturn(null)
+
+        Mockito.`when`(clock.millis())
+                .thenReturn(day + 3L)
+
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 

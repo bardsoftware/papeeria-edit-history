@@ -1,5 +1,5 @@
 
-<configuration debug="false">
+<configuration debug="false" scan="true">
 
     <property name="COSMAS_LOG" value="/var/log/cosmas" />
     <!-- This will take the value of %X (which is MDC), insert it into [] and replace it
