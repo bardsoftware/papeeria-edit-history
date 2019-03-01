@@ -297,7 +297,24 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             responseObserver.onError(StatusException(errorStatus))
             return@logging
         }
-        response.addAllVersions(versionList)
+        val actualVersionList = mutableListOf<FileVersionInfo>()
+        val curTime = clock.millis()
+        val day: Long = 24 * 60 * 60 * 1000
+        val ttl = if (request.info.isFreePlan) {
+            day
+        } else {
+            31 * day
+        }
+        for (version in versionList) {
+            // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
+            if (version.timestamp + ttl > curTime) {
+                actualVersionList.add(version)
+            } else {
+                // Checking if potentially deleted version exists - storage.get doesn't load all file content
+                this.storage.get(getBlobId(version.fileId, request.info, version.generation)) ?: break
+            }
+        }
+        response.addAllVersions(actualVersionList)
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }

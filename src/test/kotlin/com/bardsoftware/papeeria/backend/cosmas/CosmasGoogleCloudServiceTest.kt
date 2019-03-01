@@ -36,6 +36,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.*
 import java.io.IOException
 import java.time.Clock
+import java.time.Month
 
 
 /**
@@ -145,6 +146,9 @@ class CosmasGoogleCloudServiceTest {
         val blob1 = getMockedBlob("ver1", 0)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null))))
                 .thenReturn(blob1)
+
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 0))))
+                .thenReturn(blob1)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         assertEquals(listOf(0L), getVersionsList(FILE_ID, PROJECT_ID))
     }
@@ -157,6 +161,10 @@ class CosmasGoogleCloudServiceTest {
                 .addHistoryWindow(createFileVersionInfo(0L))
                 .build(), 1L)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), null))))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(blob2)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 0))))
                 .thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         assertEquals(listOf(1L, 0L), getVersionsList(FILE_ID, PROJECT_ID))
@@ -1067,15 +1075,16 @@ class CosmasGoogleCloudServiceTest {
                 getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
-    private fun addManyVersions(count: Long, windowMaxSize: Int) {
+    private fun addManyVersions(count: Long, windowMaxSize: Int, clock: Clock = getMockedClock()): Storage {
         val fakeStorage: Storage = mock(Storage::class.java)
 
-        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock(), windowMaxSize = windowMaxSize)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, clock, windowMaxSize = windowMaxSize)
 
         var curWindow = mutableListOf<FileVersionInfo>()
         val patches = mutableListOf<Patch>()
         for (i in 1L..count) {
-            val versionInfo = createFileVersionInfo(i)
+            val curTime = clock.millis()
+            val versionInfo = createFileVersionInfo(i, curTime)
 
             val patch = if (i == 1L) {
                 diffPatch(USER_ID, "", "kek $i", 0)
@@ -1083,7 +1092,7 @@ class CosmasGoogleCloudServiceTest {
                 diffPatch(USER_ID, "kek ${i - 1}", "kek $i", 0)
             }
             patches.add(patch)
-            val version = createFileVersion("kek $i", 0L, curWindow)
+            val version = createFileVersion("kek $i", curTime, curWindow)
                     .toBuilder()
                     .addPatches(patch)
                     .build()
@@ -1099,6 +1108,70 @@ class CosmasGoogleCloudServiceTest {
             addPatchToService(patch)
             commit()
         }
+        return fakeStorage
+    }
+
+    @Test
+    fun versionsNotExistFromMemory() {
+        val day = 24 * 60 * 60 * 1000
+        val clock = mock(Clock::class.java)
+
+        // Creating versions with timestamps [1, 2, day + 1, day + 2] (second block of thenReturn is for commit)
+        Mockito.`when`(clock.millis())
+                .thenReturn(1L)
+                .thenReturn(2L)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+                .thenReturn(1L)
+                .thenReturn(2L)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+
+        // Now fakeStorage doesn't contain versions with generation = 1 and 2
+        val fakeStorage = addManyVersions(4, 5, clock)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
+                .thenReturn(null)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(null)
+
+        // Current time is day + 3
+        Mockito.`when`(clock.millis())
+                .thenReturn(day + 3L)
+
+        // Versions with timestamp = 1 and timestamp = 2 have been created more than day ago,
+        // so we checked if storage doesn't contain it, that is true
+        assertEquals(listOf(4L, 3L), getVersionsList(FILE_ID, PROJECT_ID))
+    }
+
+    @Test
+    fun versionsNotExistFromStorage() {
+        val day: Long = 24 * 60 * 60 * 1000
+        val clock = mock(Clock::class.java)
+
+        // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
+        Mockito.`when`(clock.millis())
+                .thenReturn(1L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+                .thenReturn(1L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+
+        val fakeStorage = addManyVersions(4, 2, clock)
+
+        // Now fakeStorage doesn't contain version with generation = 1
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(null)
+
+        // Current time is day + 3
+        Mockito.`when`(clock.millis())
+                .thenReturn(day + 3L)
+
+        // Version with timestamp = 1 and generation = 1 has been created more than day ago,
+        // so we checked if storage doesn't contain it, that is true
+        assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
     @Test
