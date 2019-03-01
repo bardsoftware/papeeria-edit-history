@@ -297,8 +297,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
             if (version.timestamp + ttl > curTime) {
                 actualVersionList.add(version)
             } else {
-                // Checking if potentially deleted version exists - storage.get doesn't load all file content
-                this.storage.get(getBlobId(version.fileId, request.info, version.generation)) ?: break
+                break
             }
         }
         response.addAllVersions(actualVersionList)

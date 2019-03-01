@@ -1038,8 +1038,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(clock.millis())
                 .thenReturn(day + 3L)
 
-        // Versions with timestamp = 1 and timestamp = 2 have been created more than day ago,
-        // so we checked if storage doesn't contain it, that is true
+        // Versions with timestamp = 1 and timestamp = 2 have been created more than day ago - we're ignoring them
         assertEquals(listOf(4L, 3L), getVersionsList(FILE_ID, PROJECT_ID))
     }
 
@@ -1070,8 +1069,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(clock.millis())
                 .thenReturn(day + 3L)
 
-        // Version with timestamp = 1 and generation = 1 has been created more than day ago,
-        // so we checked if storage doesn't contain it, that is true
+        // Version with timestamp = 1 and generation = 1 has been created more than day ago - we're ignoring it
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
@@ -1103,8 +1101,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(clock.millis())
                 .thenReturn(month + 3L)
 
-        // Version with timestamp = 1 and generation = 1 has been created more than month ago,
-        // so we checked if storage doesn't contain it, that is true
+        // Version with timestamp = 1 and generation = 1 has been created more than month ago  - we're ignoring it
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3, isFreePlan = false))
     }
 
