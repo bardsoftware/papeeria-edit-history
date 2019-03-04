@@ -78,6 +78,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
 
         const val COSMAS_ID = "robot:::cosmas"
+        const val COSMAS_NAME = "Version History Service"
 
         fun buildNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
                            windowMaxSize: Int): MutableList<FileVersionInfo> {
@@ -217,6 +218,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 .setTimestamp(curTime)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
+        // User who made last patch
+        val userName = newVersion.patchesList.last().userName
+
         // Preparing version in memory to save following invariants for it:
         // 1) History window points to the latest N versions in GCS
         // 2) It has content that equals to content of the latest version in GCS
@@ -227,6 +231,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                 // but in this case we don't care about generation value, so I set it to 1L
                 .setGeneration(resBlob.generation ?: 1L)
                 .setTimestamp(curTime)
+                .setUserName(userName)
                 .build()
         val newWindow = buildNewWindow(newInfo, fileVersion.historyWindowList, windowMaxSize)
         project[fileId] = newVersion
@@ -588,7 +593,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         return CosmasProto.Patch.newBuilder()
                 .setText(diffPatch)
                 .setUserId(COSMAS_ID)
-                .setUserName("Papeeria")
+                .setUserName(COSMAS_NAME)
                 .setTimestamp(timestamp)
                 .setActualHash(md5Hash(newText))
                 .build()
