@@ -15,11 +15,11 @@ limitations under the License.
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.common.base.Preconditions
-import io.grpc.Server
-import io.grpc.ServerBuilder
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import com.xenomachina.argparser.mainBody
+import io.grpc.Server
+import io.grpc.ServerBuilder
 import org.slf4j.LoggerFactory
 import java.io.File
 
@@ -98,11 +98,11 @@ fun main(args: Array<String>) = mainBody {
 
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port",
-            help = "choose port that server will listen to, 50051 by default") { toInt() }.default { 50051 }
+            help = "port to listen on (default 9805)") { toInt() }.default { 9805 }
     val certChain: String? by parser.storing("--cert",
-            help = "choose path to SSL cert").default { null }
+            help = "path to SSL cert").default { null }
     val privateKey: String? by parser.storing("--key",
-            help = "choose path to SSL key").default { null }
-    val bucket: String? by parser.storing("--free-bucket",
-            help = "choose bucket").default { null }
+            help = "path to SSL key").default { null }
+    val bucket: String? by parser.storing("--bucket",
+            help = "GCS bucket where version history will be stored").default { null }
 }
