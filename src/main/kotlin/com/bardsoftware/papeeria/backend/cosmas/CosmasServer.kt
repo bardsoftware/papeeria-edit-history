@@ -98,7 +98,7 @@ fun main(args: Array<String>) = mainBody {
 
 class CosmasServerArgs(parser: ArgParser) {
     val port: Int by parser.storing("--port",
-            help = "port to listen on") { toInt() }.default { 50051 }
+            help = "port to listen on (default 9805)") { toInt() }.default { 9805 }
     val certChain: String? by parser.storing("--cert",
             help = "path to SSL cert").default { null }
     val privateKey: String? by parser.storing("--key",
