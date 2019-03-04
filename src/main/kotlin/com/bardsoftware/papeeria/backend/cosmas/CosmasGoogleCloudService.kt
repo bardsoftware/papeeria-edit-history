@@ -78,7 +78,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
 
         const val COSMAS_ID = "robot:::cosmas"
-        const val COSMAS_NAME = "Cosmas"
+        const val COSMAS_NAME = "Version History Service"
 
         fun buildNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
                            windowMaxSize: Int): MutableList<FileVersionInfo> {
