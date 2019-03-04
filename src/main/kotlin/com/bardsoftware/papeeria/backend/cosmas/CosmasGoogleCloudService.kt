@@ -62,25 +62,14 @@ private fun logging(funName: String, projectId: String, fileId: String = "", use
  *
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasGoogleCloudService(private val freeBucketName: String,
-                               private val paidBucketName: String,
+class CosmasGoogleCloudService(private val bucketName: String,
                                private val storage: Storage = StorageOptions.getDefaultInstance().service,
                                private val clock: Clock = Clock.systemUTC(),
-                               gsutilImageName: String = "",
                                private val windowMaxSize: Int = 10) : CosmasGrpc.CosmasImplBase() {
-
-    constructor(bucketName: String,
-                storage: Storage = StorageOptions.getDefaultInstance().service,
-                clock: Clock = Clock.systemUTC(),
-                gsutilImageName: String = "",
-                windowMaxSize: Int = 10)
-            : this(bucketName, bucketName, storage, clock, gsutilImageName, windowMaxSize)
 
 
     private val fileBuffer =
             ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
-
-    private val gsutilCommand = if (gsutilImageName != "") "docker run $gsutilImageName gsutil" else "gsutil"
 
 
     companion object {
@@ -99,14 +88,12 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
         }
     }
 
-    fun bucketName(isFreePlan: Boolean): String = if (isFreePlan) this.freeBucketName else this.paidBucketName
-
     fun hashUserId(userId: String) = md5Hash(userId)
 
     fun fileStorageName(fileId: String, info: ProjectInfo): String = hashUserId(info.ownerId) + "/" + fileId
 
     fun getBlobId(fileId: String, info: ProjectInfo, generation: Long? = null): BlobId {
-        return BlobId.of(bucketName(info.isFreePlan), fileStorageName(fileId, info), generation)
+        return BlobId.of(bucketName, fileStorageName(fileId, info), generation)
     }
 
     fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
@@ -310,8 +297,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             if (version.timestamp + ttl > curTime) {
                 actualVersionList.add(version)
             } else {
-                // Checking if potentially deleted version exists - storage.get doesn't load all file content
-                this.storage.get(getBlobId(version.fileId, request.info, version.generation)) ?: break
+                break
             }
         }
         response.addAllVersions(actualVersionList)
@@ -350,7 +336,7 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
     private fun getPatchListAndPreviousText(fileName: String, timestamp: Long,
                                             info: ProjectInfo): Pair<List<CosmasProto.Patch>, String> {
         val blobs: Page<Blob> = try {
-            this.storage.list(bucketName(info.isFreePlan), Storage.BlobListOption.versions(true),
+            this.storage.list(bucketName, Storage.BlobListOption.versions(true),
                     Storage.BlobListOption.prefix(fileName))
         } catch (e: StorageException) {
             throw e
@@ -593,49 +579,6 @@ class CosmasGoogleCloudService(private val freeBucketName: String,
             }
         }
         val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
-    }
-
-    override fun changeUserPlan(request: ChangeUserPlanRequest,
-                                responseObserver: StreamObserver<ChangeUserPlanResponse>) {
-        changeUserPlan(request, responseObserver, Runtime.getRuntime())
-    }
-
-    fun changeUserPlan(request: ChangeUserPlanRequest,
-                       responseObserver: StreamObserver<ChangeUserPlanResponse>,
-                       runtime: Runtime) = logging(
-            "changeUserPlan", "", "", request.userId) {
-        val isFreePlanNow = request.isFreePlanNow // plan AFTER changing
-        if (isFreePlanNow) {
-            LOG.info("From paid to free")
-        } else {
-            LOG.info("From free to paid")
-        }
-        val oldBucketName = bucketName(!isFreePlanNow)
-        val newBucketName = bucketName(isFreePlanNow)
-        val gsutilCopyCommand = "$gsutilCommand cp -r -A gs://$oldBucketName/${hashUserId(request.userId)}/*" +
-                " gs://$newBucketName/${hashUserId(request.userId)}"
-        val copyProcess = runtime.exec(gsutilCopyCommand)
-        val copyRes = copyProcess.waitFor()
-        if (copyRes != 0) {
-            val errorStatus = Status.INTERNAL.withDescription(
-                    "Can't copy user files from $oldBucketName to $newBucketName bucket")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
-            return@logging
-        }
-        val gsutilRemoveCommand = "$gsutilCommand rm -r -a gs://$oldBucketName/${hashUserId(request.userId)}"
-        val removeProcess = runtime.exec(gsutilRemoveCommand)
-        val removeRes = removeProcess.waitFor()
-        if (removeRes != 0) {
-            val errorStatus = Status.INTERNAL.withDescription(
-                    "Can't remove user files from old bucket $oldBucketName")
-            LOG.error(errorStatus.description)
-            responseObserver.onError(StatusException(errorStatus))
-            return@logging
-        }
-        val response = CosmasProto.ChangeUserPlanResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }

@@ -47,8 +47,6 @@ import java.time.Month
 class CosmasGoogleCloudServiceTest {
 
     private val BUCKET_NAME = "papeeria-interns-cosmas"
-    private val FREE_BUCKET_NAME = "papeeria-free"
-    private val PAID_BUCKET_NAME = "papeeria-paid"
     private var service = getServiceForTests()
     private val dmp = diff_match_patch()
     private val USER_ID = "1"
@@ -168,37 +166,6 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(blob2)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         assertEquals(listOf(1L, 0L), getVersionsList(FILE_ID, PROJECT_ID))
-    }
-
-    @Test
-    fun addPatchAndCommitPaidPlan() {
-        service = getServiceForTestsWithPlans()
-        val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        val patch2 = diffPatch(USER_ID, "kek", "kek lol", 2)
-        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        addPatchToService(patch2, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        commit(projectInfo(PROJECT_ID, USER_ID, false))
-        val file = getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        val (getVersionRecorder, getVersionRequest) =
-                getStreamRecorderAndRequestForGettingVersion(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
-        this.service.getVersion(getVersionRequest, getVersionRecorder)
-        assertNotNull(getVersionRecorder.error)
-        assertEquals("kek lol", file)
-    }
-
-    @Test
-    fun twoFilesWithDifferentPlan() {
-        service = getServiceForTestsWithPlans()
-        val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        val patch2 = diffPatch(USER_ID, "", "lol", 2)
-        addPatchToService(patch1, "1", projectInfo(PROJECT_ID, USER_ID, false))
-        addPatchToService(patch2, "2", projectInfo(PROJECT_ID, USER_ID, true))
-        commit(projectInfo(PROJECT_ID, USER_ID, false))
-        commit(projectInfo(PROJECT_ID, USER_ID, true))
-        val file1 = getFileFromService(0, "1", projectInfo(PROJECT_ID, USER_ID, false))
-        val file2 = getFileFromService(0, "2", projectInfo(PROJECT_ID, USER_ID, false))
-        assertEquals("kek", file1)
-        assertEquals("lol", file2)
     }
 
     @Test
@@ -339,16 +306,6 @@ class CosmasGoogleCloudServiceTest {
         addPatchToService(patch)
         forcedCommit("data", 2)
         assertEquals("data", getFileFromService(0))
-    }
-
-    @Test
-    fun forcedCommitPaid() {
-        service = getServiceForTestsWithPlans()
-        val patch = diffPatch(USER_ID, "", "never applies", 1)
-        addPatchToService(patch, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        forcedCommit("data", 2, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        getFileAssertError(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
-        assertEquals("data", getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false)))
     }
 
     private fun getFileAssertError(version: Long, fileId: String = FILE_ID, info: ProjectInfo = projectInfo()) {
@@ -680,46 +637,6 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun deleteFilePlan() {
-        val fakeStorage = mock(Storage::class.java)
-        val time = 1L
-        val cemeteryName = "$PROJECT_ID-cemetery"
-        this.service = CosmasGoogleCloudService(this.FREE_BUCKET_NAME, this.PAID_BUCKET_NAME, fakeStorage)
-        val streamRecorder = deleteFile(FILE_ID, "file", time, projectInfo(PROJECT_ID, USER_ID, false))
-        assertNull(streamRecorder.error)
-        Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo(PROJECT_ID, USER_ID, false))))
-        val newTomb = CosmasProto.FileTomb.newBuilder()
-                .setFileId(FILE_ID)
-                .setFileName("file")
-                .setRemovalTimestamp(time)
-                .build()
-        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo(PROJECT_ID, USER_ID, false))),
-                eq(FileCemetery.newBuilder().addCemetery(newTomb).build().toByteArray()))
-    }
-
-    @Test
-    fun deletedFileListPlan() {
-        val tomb1 = CosmasProto.FileTomb.newBuilder()
-                .setFileId("1")
-                .setFileName("file1")
-                .setRemovalTimestamp(1)
-                .build()
-
-        val tomb2 = CosmasProto.FileTomb.newBuilder()
-                .setFileId("2")
-                .setFileName("file2")
-                .setRemovalTimestamp(2)
-                .build()
-        service = getServiceForTestsWithPlans()
-        deleteFile("1", "file1", 1, projectInfo(PROJECT_ID, USER_ID, true))
-        deleteFile("2", "file2", 2, projectInfo(PROJECT_ID, USER_ID, false))
-        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb1).build(),
-                deletedFileList(projectInfo(PROJECT_ID, USER_ID, true)).values[0])
-        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb2).build(),
-                deletedFileList(projectInfo(PROJECT_ID, USER_ID, false)).values[0])
-    }
-
-    @Test
     fun deletedFileListTest() {
         val fakeStorage = mock(Storage::class.java)
         val time = 1L
@@ -760,24 +677,6 @@ class CosmasGoogleCloudServiceTest {
         Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
                 eq(emptyCemetery.toByteArray()))
-    }
-
-    @Test
-    fun restoreDeletedFilePlan() {
-        val tomb2 = CosmasProto.FileTomb.newBuilder()
-                .setFileId("2")
-                .setFileName("file2")
-                .setRemovalTimestamp(2)
-                .build()
-        service = getServiceForTestsWithPlans()
-        deleteFile("1", "file1", 1, projectInfo(PROJECT_ID, USER_ID, true))
-        deleteFile("2", "file2", 2, projectInfo(PROJECT_ID, USER_ID, false))
-        restoreDeletedFile("1", projectInfo(PROJECT_ID, USER_ID, true))
-
-        assertEquals(DeletedFileListResponse.getDefaultInstance(),
-                deletedFileList(projectInfo(PROJECT_ID, USER_ID, true)).values[0])
-        assertEquals(DeletedFileListResponse.newBuilder().addFiles(tomb2).build(),
-                deletedFileList(projectInfo(PROJECT_ID, USER_ID, false)).values[0])
     }
 
     @Test
@@ -1075,8 +974,8 @@ class CosmasGoogleCloudServiceTest {
                 getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
-    private fun addManyVersions(count: Long, windowMaxSize: Int, clock: Clock = getMockedClock()): Storage {
-        val fakeStorage: Storage = mock(Storage::class.java)
+    private fun addManyVersions(count: Long, windowMaxSize: Int,
+                                clock: Clock = getMockedClock(), fakeStorage: Storage = mock(Storage::class.java)) {
 
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, clock, windowMaxSize = windowMaxSize)
 
@@ -1108,7 +1007,6 @@ class CosmasGoogleCloudServiceTest {
             addPatchToService(patch)
             commit()
         }
-        return fakeStorage
     }
 
     @Test
@@ -1127,8 +1025,10 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(day + 1L)
                 .thenReturn(day + 2L)
 
+        val fakeStorage = mock(Storage::class.java)
+        addManyVersions(4, 5, clock, fakeStorage)
+
         // Now fakeStorage doesn't contain versions with generation = 1 and 2
-        val fakeStorage = addManyVersions(4, 5, clock)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 2))))
                 .thenReturn(null)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
@@ -1138,8 +1038,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(clock.millis())
                 .thenReturn(day + 3L)
 
-        // Versions with timestamp = 1 and timestamp = 2 have been created more than day ago,
-        // so we checked if storage doesn't contain it, that is true
+        // Versions with timestamp = 1 and timestamp = 2 have been created more than day ago - we're ignoring them
         assertEquals(listOf(4L, 3L), getVersionsList(FILE_ID, PROJECT_ID))
     }
 
@@ -1159,7 +1058,8 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(day + 1L)
                 .thenReturn(day + 2L)
 
-        val fakeStorage = addManyVersions(4, 2, clock)
+        val fakeStorage = mock(Storage::class.java)
+        addManyVersions(4, 2, clock, fakeStorage)
 
         // Now fakeStorage doesn't contain version with generation = 1
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
@@ -1169,53 +1069,40 @@ class CosmasGoogleCloudServiceTest {
         Mockito.`when`(clock.millis())
                 .thenReturn(day + 3L)
 
-        // Version with timestamp = 1 and generation = 1 has been created more than day ago,
-        // so we checked if storage doesn't contain it, that is true
+        // Version with timestamp = 1 and generation = 1 has been created more than day ago - we're ignoring it
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3))
     }
 
     @Test
-    fun changeUserPlanTest() {
-        service = getServiceForTestsWithPlans()
-        val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        val patch2 = diffPatch(USER_ID, "kek", "lol", 2)
-        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        commit(projectInfo(PROJECT_ID, USER_ID, false))
-        changePlan(true)
-        addPatchToService(patch2, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
-        commit(projectInfo(PROJECT_ID, USER_ID, true))
-        val file1 = getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        val file2 = getFileFromService(0, FILE_ID, projectInfo(PROJECT_ID, USER_ID, true))
-        assertEquals("kek", file1)
-        assertEquals("lol", file2)
-    }
+    fun versionsNotExistFromStoragePaid() {
+        val day: Long = 24 * 60 * 60 * 1000
+        val month = 31 * day
+        val clock = mock(Clock::class.java)
 
-    @Test
-    fun changeUserPlanTestDelete() {
-        service = getServiceForTestsWithPlans()
-        val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        commit(projectInfo(PROJECT_ID, USER_ID, false))
-        deleteFile(FILE_ID, "file", 3, projectInfo(PROJECT_ID, USER_ID, false))
-        val recorder = changePlan(true)
-        assertNull(recorder.error)
-    }
+        // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
+        Mockito.`when`(clock.millis())
+                .thenReturn(1L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
+                .thenReturn(1L)
+                .thenReturn(day)
+                .thenReturn(day + 1L)
+                .thenReturn(day + 2L)
 
-    @Test
-    fun changeUserPlanTestFailed() {
-        val runtime = mock(Runtime::class.java)
-        val process = mock(Process::class.java)
-        Mockito.`when`(runtime.exec(Matchers.anyString()))
-                .thenReturn(process)
-        Mockito.`when`(process.waitFor())
-                .thenReturn(-1)
-        service = getServiceForTestsWithPlans()
-        val patch1 = diffPatch(USER_ID, "", "kek", 1)
-        addPatchToService(patch1, FILE_ID, projectInfo(PROJECT_ID, USER_ID, false))
-        commit(projectInfo(PROJECT_ID, USER_ID, false))
-        val recorder = changePlan(true, runtime)
-        assertNotNull(recorder.error)
-        assertEquals(Status.INTERNAL.code, (recorder.error as StatusException).status.code)
+        val fakeStorage = mock(Storage::class.java)
+        addManyVersions(4, 2, clock, fakeStorage)
+
+        // Now fakeStorage doesn't contain version with generation = 1
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(FILE_ID, projectInfo(), 1))))
+                .thenReturn(null)
+
+        // Current time is month + 3
+        Mockito.`when`(clock.millis())
+                .thenReturn(month + 3L)
+
+        // Version with timestamp = 1 and generation = 1 has been created more than month ago  - we're ignoring it
+        assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3, isFreePlan = false))
     }
 
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = FILE_ID,
@@ -1236,10 +1123,6 @@ class CosmasGoogleCloudServiceTest {
         return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service, getMockedClock())
     }
 
-    private fun getServiceForTestsWithPlans(): CosmasGoogleCloudService {
-        return CosmasGoogleCloudService(FREE_BUCKET_NAME, PAID_BUCKET_NAME, LocalStorageHelper.getOptions().service)
-    }
-
     private fun getStreamRecorderAndRequestForVersionList(fileId: String = FILE_ID, info: ProjectInfo = projectInfo(),
                                                           startGeneration: Long):
             Pair<StreamRecorder<FileVersionListResponse>, FileVersionListRequest> {
@@ -1254,9 +1137,10 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getVersionsList(fileId: String = FILE_ID, projectId: String = PROJECT_ID,
-                                startGeneration: Long = -1L): List<Long> {
+                                startGeneration: Long = -1L, isFreePlan: Boolean = true): List<Long> {
         val (listVersionsRecorder, listVersionsRequest) =
-                getStreamRecorderAndRequestForVersionList(fileId, projectInfo(projectId = projectId), startGeneration)
+                getStreamRecorderAndRequestForVersionList(fileId,
+                        projectInfo(projectId = projectId, isFreePlan = isFreePlan), startGeneration)
         this.service.fileVersionList(listVersionsRequest, listVersionsRecorder)
         return listVersionsRecorder.values[0].versionsList.map { e -> e.generation }
     }
@@ -1470,17 +1354,6 @@ class CosmasGoogleCloudServiceTest {
                 .setOwnerId(ownerId)
                 .setIsFreePlan(isFreePlan)
                 .build()
-    }
-
-    fun changePlan(toFree: Boolean, runtime: Runtime = getMockedRuntime(), userId: String = USER_ID):
-            StreamRecorder<ChangeUserPlanResponse> {
-        val recorder: StreamRecorder<ChangeUserPlanResponse> = StreamRecorder.create()
-        val request = ChangeUserPlanRequest.newBuilder()
-                .setIsFreePlanNow(toFree)
-                .setUserId(userId)
-                .build()
-        this.service.changeUserPlan(request, recorder, runtime)
-        return recorder
     }
 
     fun getMockedClock(): Clock {

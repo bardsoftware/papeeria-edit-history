@@ -72,25 +72,23 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
 fun main(args: Array<String>) = mainBody {
     val parser = ArgParser(args)
     val arg = CosmasServerArgs(parser)
-    val freeBucket = arg.freeBucket
-    val paidBucket = arg.paidBucket
-    val gsutilImageName = arg.gsutilImageName
+    val bucket = arg.bucket
 
-    if (freeBucket == null || paidBucket == null) {
-        LOG.error("Please cpecify --free-bucket and --paid-bucket arguments to run GCS Cosmas implementation")
+    if (bucket == null) {
+        LOG.error("Please cpecify --bucket argument to run GCS Cosmas implementation")
         return@mainBody
     }
     val server =
             if (arg.certChain != null && arg.privateKey != null) {
                 LOG.info("Starting Cosmas in SECURE mode")
                 CosmasServer(arg.port,
-                        CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName),
+                        CosmasGoogleCloudService(bucket),
                         File(arg.certChain),
                         File(arg.privateKey))
             } else {
                 LOG.info("Starting Cosmas in INSECURE mode")
                 CosmasServer(arg.port,
-                        CosmasGoogleCloudService(freeBucket, paidBucket, gsutilImageName = gsutilImageName))
+                        CosmasGoogleCloudService(bucket))
             }
 
     LOG.info("Listening on port ${arg.port}")
@@ -105,10 +103,6 @@ class CosmasServerArgs(parser: ArgParser) {
             help = "choose path to SSL cert").default { null }
     val privateKey: String? by parser.storing("--key",
             help = "choose path to SSL key").default { null }
-    val freeBucket: String? by parser.storing("--free-bucket",
-            help = "choose bucket for users with free plan").default { null }
-    val paidBucket: String? by parser.storing("--paid-bucket",
-            help = "choose bucket for users with paid plan").default { null }
-    val gsutilImageName: String by parser.storing("--gsutil-image",
-            help = "choose docker image with gsutil").default { "" }
+    val bucket: String? by parser.storing("--free-bucket",
+            help = "choose bucket").default { null }
 }
