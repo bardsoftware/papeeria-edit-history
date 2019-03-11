@@ -420,9 +420,9 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
     }
 
-    override fun deleteFile(request: CosmasProto.DeleteFileRequest,
-                            responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
-            "deleteFile", request.info.projectId, request.fileId, other = mapOf("fileName" to request.fileName)) {
+    override fun deleteFiles(request: CosmasProto.DeleteFilesRequest,
+                            responseObserver: StreamObserver<CosmasProto.DeleteFilesResponse>) = logging(
+            "deleteFiles", request.info.projectId) {
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -430,26 +430,30 @@ class CosmasGoogleCloudService(private val bucketName: String,
             handleStorageException(e, responseObserver)
             return@logging
         }
-        val newTomb = FileTomb.newBuilder()
-                .setFileId(request.fileId)
-                .setFileName(request.fileName)
-                .setRemovalTimestamp(request.removalTimestamp)
-                .build()
         val cemetery = if (cemeteryBytes == null) {
             FileCemetery.newBuilder()
         } else {
             FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
         }
+        for (file in request.filesList) {
+            val newTomb = FileTomb.newBuilder()
+                    .setFileId(file.fileId)
+                    .setFileName(file.fileName)
+                    .setRemovalTimestamp(request.removalTimestamp)
+                    .build()
+            cemetery.addCemetery(newTomb)
+        }
+
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
-                    cemetery.addCemetery(newTomb).build().toByteArray())
+                    cemetery.build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
         }
 
-        val response = DeleteFileResponse.newBuilder().build()
+        val response = DeleteFilesResponse.newBuilder().build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }

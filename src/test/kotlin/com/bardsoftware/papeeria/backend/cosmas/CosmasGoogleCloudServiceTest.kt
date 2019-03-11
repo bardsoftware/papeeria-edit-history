@@ -1300,15 +1300,17 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun deleteFile(fileId: String, fileName: String, time: Long,
-                           info: ProjectInfo = projectInfo()): StreamRecorder<DeleteFileResponse> {
-        val deleteFileRecorder: StreamRecorder<DeleteFileResponse> = StreamRecorder.create()
-        val deleteFileRequest = DeleteFileRequest.newBuilder()
-                .setInfo(info)
+                           info: ProjectInfo = projectInfo()): StreamRecorder<DeleteFilesResponse> {
+        val deleteFileRecorder: StreamRecorder<DeleteFilesResponse> = StreamRecorder.create()
+        val deleteFileInfo = DeletedFileInfo.newBuilder()
                 .setFileId(fileId)
                 .setFileName(fileName)
+        val deleteFileRequest = DeleteFilesRequest.newBuilder()
+                .setInfo(info)
+                .addFiles(deleteFileInfo)
                 .setRemovalTimestamp(time)
                 .build()
-        this.service.deleteFile(deleteFileRequest, deleteFileRecorder)
+        this.service.deleteFiles(deleteFileRequest, deleteFileRecorder)
         return deleteFileRecorder
     }
 
