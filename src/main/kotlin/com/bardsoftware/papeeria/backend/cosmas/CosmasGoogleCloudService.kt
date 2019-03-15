@@ -420,6 +420,45 @@ class CosmasGoogleCloudService(private val bucketName: String,
         }
     }
 
+    override fun deleteFiles(request: CosmasProto.DeleteFilesRequest,
+                            responseObserver: StreamObserver<CosmasProto.DeleteFilesResponse>) = logging(
+            "deleteFiles", request.info.projectId) {
+        val cemeteryName = "${request.info.projectId}-cemetery"
+        val cemeteryBytes: Blob? = try {
+            this.storage.get(getBlobId(cemeteryName, request.info))
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+        val cemetery = if (cemeteryBytes == null) {
+            FileCemetery.newBuilder()
+        } else {
+            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+        }
+        for (file in request.filesList) {
+            val newTomb = FileTomb.newBuilder()
+                    .setFileId(file.fileId)
+                    .setFileName(file.fileName)
+                    .setRemovalTimestamp(request.removalTimestamp)
+                    .build()
+            cemetery.addCemetery(newTomb)
+            LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
+        }
+
+        try {
+            this.storage.create(
+                    getBlobInfo(cemeteryName, request.info),
+                    cemetery.build().toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+
+        val response = DeleteFilesResponse.newBuilder().build()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
     override fun deleteFile(request: CosmasProto.DeleteFileRequest,
                             responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
             "deleteFile", request.info.projectId, request.fileId, other = mapOf("fileName" to request.fileName)) {
@@ -512,6 +551,12 @@ class CosmasGoogleCloudService(private val bucketName: String,
             val latestVersion = CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
             LOG.info("Restoring from GCS to buffer file")
 
+            val userName = if (latestVersion.patchesList.isEmpty()) {
+                COSMAS_NAME
+            } else {
+                latestVersion.patchesList.last().userName
+            }
+
             // Preparing new version in memory to replace bad or nonexistent one in buffer
             // Window should point to the latest N versions
             val latestVersionInfo = FileVersionInfo.newBuilder()
@@ -519,6 +564,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                     // For in-memory storage implementation resultBlob.generation == null,
                     // but in this case we don't care about generation value, so I set it to 1L
                     .setGeneration(latestVersionBlob.generation ?: 1L)
+                    .setUserName(userName)
                     .setTimestamp(latestVersion.timestamp)
                     .build()
             val bufferWindow = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)

@@ -117,7 +117,22 @@ message DeletePatchResponse {
     bytes content = 1;
 }
 
+message DeleteFilesRequest {
+    ProjectInfo info = 1;
+    repeated DeletedFileInfo files = 2;
+    int64 removalTimestamp = 3;
+}
+
+message DeletedFileInfo {
+    string fileId = 1;
+    string fileName = 2;
+}
+
+message DeleteFilesResponse {
+}
+
 message DeleteFileRequest {
+    option deprecated = true;
     ProjectInfo info = 1;
     string fileId = 2;
     string fileName = 3;
@@ -126,6 +141,7 @@ message DeleteFileRequest {
 
 
 message DeleteFileResponse {
+    option deprecated = true;
 }
 
 message DeletedFileListRequest {
@@ -173,7 +189,10 @@ service Cosmas {
     }
     rpc DeletePatch (DeletePatchRequest) returns (DeletePatchResponse) {
     }
+    rpc DeleteFiles (DeleteFilesRequest) returns (DeleteFilesResponse) {
+    }
     rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) {
+        option deprecated = true;
     }
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
     }
