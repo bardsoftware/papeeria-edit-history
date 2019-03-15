@@ -131,6 +131,17 @@ message DeletedFileInfo {
 message DeleteFilesResponse {
 }
 
+message DeleteFileRequest { // Outdated
+    ProjectInfo info = 1;
+    string fileId = 2;
+    string fileName = 3;
+    int64 removalTimestamp = 4;
+}
+
+
+message DeleteFileResponse { // Outdated
+}
+
 message DeletedFileListRequest {
     ProjectInfo info = 1;
 }
@@ -177,6 +188,8 @@ service Cosmas {
     rpc DeletePatch (DeletePatchRequest) returns (DeletePatchResponse) {
     }
     rpc DeleteFiles (DeleteFilesRequest) returns (DeleteFilesResponse) {
+    }
+    rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) { // Outdated
     }
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
     }
