@@ -131,7 +131,8 @@ message DeletedFileInfo {
 message DeleteFilesResponse {
 }
 
-message DeleteFileRequest { // Outdated
+message DeleteFileRequest {
+    option deprecated = true;
     ProjectInfo info = 1;
     string fileId = 2;
     string fileName = 3;
@@ -139,7 +140,8 @@ message DeleteFileRequest { // Outdated
 }
 
 
-message DeleteFileResponse { // Outdated
+message DeleteFileResponse {
+    option deprecated = true;
 }
 
 message DeletedFileListRequest {
@@ -189,7 +191,8 @@ service Cosmas {
     }
     rpc DeleteFiles (DeleteFilesRequest) returns (DeleteFilesResponse) {
     }
-    rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) { // Outdated
+    rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) {
+        option deprecated = true;
     }
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
     }
