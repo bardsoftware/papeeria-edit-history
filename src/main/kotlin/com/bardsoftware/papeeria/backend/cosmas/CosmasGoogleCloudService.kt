@@ -442,6 +442,7 @@ class CosmasGoogleCloudService(private val bucketName: String,
                     .setRemovalTimestamp(request.removalTimestamp)
                     .build()
             cemetery.addCemetery(newTomb)
+            LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
         }
 
         try {
