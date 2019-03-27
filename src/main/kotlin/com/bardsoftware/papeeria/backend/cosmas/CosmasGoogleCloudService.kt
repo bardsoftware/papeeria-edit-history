@@ -69,6 +69,8 @@ class CosmasGoogleCloudService(
     private val storage: Storage = StorageOptions.getDefaultInstance().toBuilder().apply {
       this.setRetrySettings(RetrySettings.newBuilder()
           .setInitialRetryDelay(Duration.ofSeconds(1))
+          .setMaxRetryDelay(Duration.ofSeconds(128))
+          .setRetryDelayMultiplier(2.0)
           .setMaxAttempts(5)
           .build()
       )

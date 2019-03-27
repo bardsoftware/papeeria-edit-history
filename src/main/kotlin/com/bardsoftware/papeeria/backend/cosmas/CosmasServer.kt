@@ -36,6 +36,19 @@ private val LOG = LoggerFactory.getLogger("CosmasServer")
  */
 class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain: File? = null, privateKey: File? = null) {
 
+    // Suppose that one GCS request is 50ms
+    // => 20 rps from a single thread.
+    // => 200 rps per 10 threads which is way below 1000 rps for a bucket.
+    // Queue capacity of 400 will allow for a queue of doubled max rps value.
+    // TODO: this settings won't save us from exceeing single object write limit
+    // of 1 rps if requests come as different RPC calls and get into different
+    // threads.
+    // https://cloud.google.com/storage/quotas#objects
+    // Task affinity could help us (e.g. we could try scheduling GCS calls in our own
+    // executor service with task affinity.
+    private val executor = ThreadPoolExecutor(
+        2, 10, 60L, TimeUnit.SECONDS, Queues.newArrayBlockingQueue(400),
+        GrpcUtil.getThreadFactory("cosmas-grpc-thread-%d", true))
     private val server: Server
 
     init {
@@ -45,20 +58,7 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain:
             Preconditions.checkState(privateKey.exists(), "SSL key file doesn't exists: %s", privateKey)
             builder = builder.useTransportSecurity(certChain, privateKey)
         }
-        // Suppose that one GCS request is 50ms
-        // => 20 rps from a single thread.
-        // => 200 rps per 10 threads which is way below 1000 rps for a bucket.
-        // Queue capacity of 400 will allow for a queue of doubled max rps value.
-        // TODO: this settings won't save us from exceeing single object write limit
-        // of 1 rps if requests come as different RPC calls and get into different
-        // threads.
-        // https://cloud.google.com/storage/quotas#objects
-        // Task affinity could help us (e.g. we could try scheduling GCS calls in our own
-        // executor service with task affinity.
-        builder = builder.executor(ThreadPoolExecutor(
-            0, 10, 60L, TimeUnit.SECONDS, Queues.newArrayBlockingQueue(400),
-            GrpcUtil.getThreadFactory("cosmas-grpc-thread-%d", true))
-        )
+        builder = builder.executor(this.executor)
         this.server = builder.build()
     }
 
@@ -72,6 +72,7 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain:
     }
 
     private fun stop() {
+        this.executor.shutdown()
         this.server.shutdown()
     }
 
