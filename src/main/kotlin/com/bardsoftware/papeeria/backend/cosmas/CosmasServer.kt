@@ -15,13 +15,17 @@ limitations under the License.
 package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.common.base.Preconditions
+import com.google.common.collect.Queues
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import com.xenomachina.argparser.mainBody
 import io.grpc.Server
 import io.grpc.ServerBuilder
+import io.grpc.internal.GrpcUtil
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 private val LOG = LoggerFactory.getLogger("CosmasServer")
 
@@ -30,25 +34,33 @@ private val LOG = LoggerFactory.getLogger("CosmasServer")
  * It uses CosmasGoogleCloudService or CosmasInMemoryService to store files
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase) {
+class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain: File? = null, privateKey: File? = null) {
 
-    constructor(port: Int, service: CosmasGrpc.CosmasImplBase,
-                certChain: File, privateKey: File) : this(port, service) {
-        Preconditions.checkState(certChain.exists(), "SSL certificate file doesn't exists: %s", certChain)
-        Preconditions.checkState(privateKey.exists(), "SSL key file doesn't exists: %s", privateKey)
-        this.server = ServerBuilder
-                .forPort(port)
-                .useTransportSecurity(certChain, privateKey)
-                .addService(service)
-                .build()
+    private val server: Server
+
+    init {
+        var builder = ServerBuilder.forPort(port).addService(service)
+        if (certChain != null && privateKey != null) {
+            Preconditions.checkState(certChain.exists(), "SSL certificate file doesn't exists: %s", certChain)
+            Preconditions.checkState(privateKey.exists(), "SSL key file doesn't exists: %s", privateKey)
+            builder = builder.useTransportSecurity(certChain, privateKey)
+        }
+        // Suppose that one GCS request is 50ms
+        // => 20 rps from a single thread.
+        // => 200 rps per 10 threads which is way below 1000 rps for a bucket.
+        // Queue capacity of 400 will allow for a queue of doubled max rps value.
+        // TODO: this settings won't save us from exceeing single object write limit
+        // of 1 rps if requests come as different RPC calls and get into different
+        // threads.
+        // https://cloud.google.com/storage/quotas#objects
+        // Task affinity could help us (e.g. we could try scheduling GCS calls in our own
+        // executor service with task affinity.
+        builder = builder.executor(ThreadPoolExecutor(
+            0, 10, 60L, TimeUnit.SECONDS, Queues.newArrayBlockingQueue(400),
+            GrpcUtil.getThreadFactory("cosmas-grpc-thread-%d", true))
+        )
+        this.server = builder.build()
     }
-
-
-    private var server: Server = ServerBuilder
-            .forPort(port)
-            .addService(service)
-            .build()
-
 
     fun start() {
         this.server.start()

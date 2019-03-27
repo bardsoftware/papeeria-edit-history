@@ -14,7 +14,9 @@ limitations under the License.
  */
 package com.bardsoftware.papeeria.backend.cosmas
 
+import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
+import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.storage.*
 import com.google.common.base.Charsets
 import com.google.common.hash.Hashing
@@ -25,10 +27,10 @@ import io.grpc.stub.StreamObserver
 import name.fraser.neil.plaintext.diff_match_patch
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import org.threeten.bp.Duration
+import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
-import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
-import java.time.Clock
 import kotlin.math.min
 
 
@@ -62,10 +64,17 @@ private fun logging(funName: String, projectId: String, fileId: String = "", use
  *
  * @author Aleksandr Fedotov (iisuslik43)
  */
-class CosmasGoogleCloudService(private val bucketName: String,
-                               private val storage: Storage = StorageOptions.getDefaultInstance().service,
-                               private val clock: Clock = Clock.systemUTC(),
-                               private val windowMaxSize: Int = 10) : CosmasGrpc.CosmasImplBase() {
+class CosmasGoogleCloudService(
+    private val bucketName: String,
+    private val storage: Storage = StorageOptions.getDefaultInstance().toBuilder().apply {
+      this.setRetrySettings(RetrySettings.newBuilder()
+          .setInitialRetryDelay(Duration.ofSeconds(1))
+          .setMaxAttempts(5)
+          .build()
+      )
+    }.build().service,
+    private val clock: Clock = Clock.systemUTC(),
+    private val windowMaxSize: Int = 10) : CosmasGrpc.CosmasImplBase() {
 
 
     private val fileBuffer =
