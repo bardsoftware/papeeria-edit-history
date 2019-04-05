@@ -590,7 +590,8 @@ class CosmasGoogleCloudService(
 
     override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) = logging(
-            "restoreDeletedFile", request.info.projectId, request.oldFileId) {
+            "restoreDeletedFile", request.info.projectId, request.oldFileId,
+                    other = mapOf("newFileId" to request.newFileId)) {
         LOG.info("")
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
