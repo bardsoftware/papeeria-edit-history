@@ -605,7 +605,7 @@ class CosmasGoogleCloudService(
             CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
         }
         val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it -> it.fileId == request.fileId }
+        tombs.removeIf { it.fileId == request.fileId }
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
@@ -613,6 +613,13 @@ class CosmasGoogleCloudService(
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
+        }
+        if (request.newFileId.isNotEmpty()) {
+            val change = ChangeId.newBuilder()
+                    .setOldFileId(request.fileId)
+                    .setNewFileId(request.newFileId)
+                    .build()
+            changeFileId(request.info, listOf(change))
         }
         val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
         responseObserver.onNext(response)
@@ -626,23 +633,27 @@ class CosmasGoogleCloudService(
           |${request}
         """.trimMargin())
 
+        changeFileId(request.info, request.changesList)
 
+        val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    private fun changeFileId(info: ProjectInfo, changes: List<ChangeId>) {
         val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
+            this.fileBuffer.getOrPut(info.projectId) { ConcurrentHashMap() }
         }
         if (project != null) {
             synchronized(project) {
-                for (change in request.changesList) {
+                for (change in changes) {
                     val oldVersion = project[change.oldFileId]
-                            ?: restoreFileFromStorage(change.oldFileId, request.info, project)
+                            ?: restoreFileFromStorage(change.oldFileId, info, project)
                     project[change.newFileId] = oldVersion
                     project.remove(change.oldFileId)
                 }
             }
         }
-        val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {

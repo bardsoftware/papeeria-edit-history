@@ -164,7 +164,8 @@ message ForcedFileCommitResponse {
 
 message RestoreDeletedFileRequest {
     ProjectInfo info = 1;
-    string fileId = 2;
+    string fileId = 2;    // for compatibility I can't rename it
+    string newFileId = 3; // and if it is an empty string, we won't fall
 }
 
 message RestoreDeletedFileResponse {
