@@ -47,6 +47,14 @@ message FileCemetery {
     repeated FileTomb cemetery = 1;
 }
 
+message Buffer {
+    map<string,  ProjectBuffer> buffer = 1;
+}
+
+message ProjectBuffer {
+    map<string, FileVersion> project = 1;
+}
+
 message FileVersion {
     repeated Patch patches = 1;
     bytes content = 2;

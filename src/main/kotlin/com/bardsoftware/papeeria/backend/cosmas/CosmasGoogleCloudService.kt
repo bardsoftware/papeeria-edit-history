@@ -31,6 +31,8 @@ import org.threeten.bp.Duration
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors;
 import kotlin.math.min
 
 
@@ -77,12 +79,12 @@ class CosmasGoogleCloudService(
             )
         }.build().service,
         private val clock: Clock = Clock.systemUTC(),
-        private val windowMaxSize: Int = 10) : CosmasGrpc.CosmasImplBase() {
+        private val windowMaxSize: Int = 10,
+        private val bufferSaveExecutor: ExecutorService = Executors.newSingleThreadExecutor()) : CosmasGrpc.CosmasImplBase() {
 
 
     private val fileBuffer =
             ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
-
 
     companion object {
         fun md5Hash(text: String): String {
@@ -91,6 +93,7 @@ class CosmasGoogleCloudService(
 
         const val COSMAS_ID = "robot:::cosmas"
         const val COSMAS_NAME = "Version History Service"
+        const val BUFFER_NAME_GCS = "File buffer"
 
         fun buildNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
                            windowMaxSize: Int): MutableList<FileVersionInfo> {
@@ -639,6 +642,9 @@ class CosmasGoogleCloudService(
         """.trimMargin())
 
         changeFileId(request.info, request.changesList)
+        this.bufferSaveExecutor.submit {
+            saveBufferToGCS()
+        }
 
         val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
         responseObserver.onNext(response)
@@ -658,6 +664,27 @@ class CosmasGoogleCloudService(
                     project.remove(change.oldFileId)
                 }
             }
+        }
+    }
+
+    private fun saveBufferToGCS() {
+        val projects = mutableMapOf<String, ProjectBuffer>()
+        for ((projectId, project) in this.fileBuffer.entries) {
+            synchronized(project) {
+                projects[projectId] = ProjectBuffer.newBuilder()
+                        .putAllProject(project)
+                        .build()
+            }
+        }
+        val buffer = Buffer.newBuilder()
+                .putAllBuffer(projects)
+                .build()
+        try {
+            this.storage.create(
+                    BlobInfo.newBuilder(BlobId.of(bucketName, BUFFER_NAME_GCS)).build(),
+                    buffer.toByteArray())
+        } catch (e: StorageException) {
+            LOG.error("StorageException happened at Cosmas", e)
         }
     }
 

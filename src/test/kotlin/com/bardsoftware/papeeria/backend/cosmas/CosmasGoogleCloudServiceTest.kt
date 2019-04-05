@@ -38,6 +38,7 @@ import org.mockito.Mockito.*
 import java.io.IOException
 import java.time.Clock
 import java.time.Month
+import java.util.concurrent.ExecutorService
 
 
 /**
@@ -913,7 +914,22 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("lol", getFileFromService(1, "2"))
     }
 
-
+    @Test
+    fun changeFileIdSavingBuffer() {
+        val bufferSaveExecutor = mock(ExecutorService::class.java)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service,
+                getMockedClock(), bufferSaveExecutor = bufferSaveExecutor)
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+        val patch2 = diffPatch(USER_ID, "kek", "lol", 1)
+        addPatchToService(patch2, "2")
+        commit()
+        assertEquals("kek", getFileFromService(1))
+        assertEquals("lol", getFileFromService(1, "2"))
+        verify(bufferSaveExecutor).submit(any(Runnable::class.java))
+    }
     @Test
     fun changeFileIdWithPatch() {
         val patch1 = diffPatch(USER_ID, "", "kek", 1)
@@ -1304,7 +1320,8 @@ class CosmasGoogleCloudServiceTest {
 
 
     private fun getServiceForTests(): CosmasGoogleCloudService {
-        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service, getMockedClock())
+        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service,
+                getMockedClock(), bufferSaveExecutor = mock(ExecutorService::class.java))
     }
 
     private fun getStreamRecorderAndRequestForVersionList(fileId: String = FILE_ID, info: ProjectInfo = projectInfo(),
