@@ -590,7 +590,7 @@ class CosmasGoogleCloudService(
 
     override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) = logging(
-            "restoreDeletedFile", request.info.projectId, request.fileId) {
+            "restoreDeletedFile", request.info.projectId, request.oldFileId) {
         LOG.info("")
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
@@ -605,7 +605,7 @@ class CosmasGoogleCloudService(
             CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
         }
         val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it.fileId == request.fileId }
+        tombs.removeIf { it.fileId == request.oldFileId }
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
@@ -616,7 +616,7 @@ class CosmasGoogleCloudService(
         }
         if (request.newFileId.isNotEmpty()) {
             val change = ChangeId.newBuilder()
-                    .setOldFileId(request.fileId)
+                    .setOldFileId(request.oldFileId)
                     .setNewFileId(request.newFileId)
                     .build()
             changeFileId(request.info, listOf(change))

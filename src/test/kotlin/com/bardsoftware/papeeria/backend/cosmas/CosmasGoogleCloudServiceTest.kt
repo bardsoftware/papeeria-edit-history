@@ -1492,7 +1492,7 @@ class CosmasGoogleCloudServiceTest {
         val recorder: StreamRecorder<RestoreDeletedFileResponse> = StreamRecorder.create()
         val request = RestoreDeletedFileRequest
                 .newBuilder()
-                .setFileId(fileId)
+                .setOldFileId(fileId)
                 .setNewFileId(newFileId)
                 .setInfo(info)
                 .build()
