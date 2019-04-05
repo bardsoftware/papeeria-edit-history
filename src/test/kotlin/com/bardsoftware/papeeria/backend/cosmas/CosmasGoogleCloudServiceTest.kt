@@ -745,7 +745,6 @@ class CosmasGoogleCloudServiceTest {
     }
 
 
-
     @Test
     fun restoreDeletedFileTest() {
         val fakeStorage = mock(Storage::class.java)
@@ -763,6 +762,95 @@ class CosmasGoogleCloudServiceTest {
                 .thenReturn(cemeteryBlob)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         restoreDeletedFile()
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
+                eq(emptyCemetery.toByteArray()))
+    }
+
+
+    @Test
+    fun restoreDeletedFileAndChangingIdOldRequestFormat() {
+        val fakeStorage = mock(Storage::class.java)
+        val time = 1L
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file")
+                .setRemovalTimestamp(time)
+                .build()
+        val cemetery = FileCemetery.newBuilder().addCemetery(tomb).build()
+        val emptyCemetery = FileCemetery.getDefaultInstance()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
+                .thenReturn(cemeteryBlob)
+
+        val blob1 = getMockedBlob("ver1", 1, 1)
+        val blob2 = getMockedBlob("ver2", 2, 2)
+        Mockito.`when`(fakeStorage.get(service.getBlobId(FILE_ID, projectInfo(), 1)))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(service.getBlobId("2", projectInfo(), 2)))
+                .thenReturn(blob2)
+
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java)))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo("2", projectInfo())),
+                any(ByteArray::class.java)))
+                .thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        addPatchToService(patch1)
+        commit()
+        restoreDeletedFile()
+        changeFileId("2")
+        addPatchToService(patch2, "2")
+        commit()
+        assertEquals(listOf(2L, 1L), getVersionsList("2"))
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
+                eq(emptyCemetery.toByteArray()))
+
+    }
+
+    @Test
+    fun restoreDeletedFileAndChangingIdOneRequest() {
+        val fakeStorage = mock(Storage::class.java)
+        val time = 1L
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file")
+                .setRemovalTimestamp(time)
+                .build()
+        val cemetery = FileCemetery.newBuilder().addCemetery(tomb).build()
+        val emptyCemetery = FileCemetery.getDefaultInstance()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
+                .thenReturn(cemeteryBlob)
+
+        val blob1 = getMockedBlob("ver1", 1, 1)
+        val blob2 = getMockedBlob("ver2", 2, 2)
+        Mockito.`when`(fakeStorage.get(service.getBlobId(FILE_ID, projectInfo(), 1)))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.get(service.getBlobId("2", projectInfo(), 2)))
+                .thenReturn(blob2)
+
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(FILE_ID, projectInfo())),
+                any(ByteArray::class.java)))
+                .thenReturn(blob1)
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo("2", projectInfo())),
+                any(ByteArray::class.java)))
+                .thenReturn(blob2)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch1 = diffPatch(USER_ID, "", "ver1", 1)
+        val patch2 = diffPatch(USER_ID, "ver1", "ver2", 2)
+        addPatchToService(patch1)
+        commit()
+        restoreDeletedFile(newFileId = "2")
+        addPatchToService(patch2, "2")
+        commit()
+        assertEquals(listOf(2L, 1L), getVersionsList("2"))
         Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
                 eq(emptyCemetery.toByteArray()))
@@ -1242,7 +1330,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getFullVersionsList(fileId: String = FILE_ID, projectId: String = PROJECT_ID,
-                                startGeneration: Long = -1L, isFreePlan: Boolean = true): List<FileVersionInfo> {
+                                    startGeneration: Long = -1L, isFreePlan: Boolean = true): List<FileVersionInfo> {
         val (listVersionsRecorder, listVersionsRequest) =
                 getStreamRecorderAndRequestForVersionList(fileId,
                         projectInfo(projectId = projectId, isFreePlan = isFreePlan), startGeneration)
@@ -1380,7 +1468,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun deleteFiles(files: List<DeletedFileInfo>, time: Long,
-                           info: ProjectInfo = projectInfo()): StreamRecorder<DeleteFilesResponse> {
+                            info: ProjectInfo = projectInfo()): StreamRecorder<DeleteFilesResponse> {
         val deleteFileRecorder: StreamRecorder<DeleteFilesResponse> = StreamRecorder.create()
         val deleteFileRequest = DeleteFilesRequest.newBuilder()
                 .setInfo(info)
@@ -1399,11 +1487,13 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun restoreDeletedFile(fileId: String = FILE_ID,
-                                   info: ProjectInfo = projectInfo()): StreamRecorder<RestoreDeletedFileResponse> {
+                                   info: ProjectInfo = projectInfo(),
+                                   newFileId: String = ""): StreamRecorder<RestoreDeletedFileResponse> {
         val recorder: StreamRecorder<RestoreDeletedFileResponse> = StreamRecorder.create()
         val request = RestoreDeletedFileRequest
                 .newBuilder()
-                .setFileId(fileId)
+                .setOldFileId(fileId)
+                .setNewFileId(newFileId)
                 .setInfo(info)
                 .build()
         this.service.restoreDeletedFile(request, recorder)
