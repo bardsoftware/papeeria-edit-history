@@ -694,6 +694,7 @@ class CosmasGoogleCloudServiceTest {
                 .build()
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
                 eq(FileCemetery.newBuilder().addAllCemetery(listOf(newTomb1, newTomb2)).build().toByteArray()))
+        Mockito.verify(fakeStorage).get(BlobId.of(BUCKET_NAME, CosmasGoogleCloudService.BUFFER_NAME_GCS))
         Mockito.verifyNoMoreInteractions(fakeStorage)
     }
 

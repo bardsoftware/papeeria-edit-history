@@ -83,8 +83,7 @@ class CosmasGoogleCloudService(
         private val bufferSaveExecutor: ExecutorService = Executors.newSingleThreadExecutor()) : CosmasGrpc.CosmasImplBase() {
 
 
-    private val fileBuffer =
-            ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
+    private val fileBuffer = loadBufferFromGCS()
 
     companion object {
         fun md5Hash(text: String): String {
@@ -686,6 +685,21 @@ class CosmasGoogleCloudService(
         } catch (e: StorageException) {
             LOG.error("StorageException happened at Cosmas", e)
         }
+    }
+
+    private fun loadBufferFromGCS(): ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>> {
+        val buffer = ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
+        val bufferBytes: Blob = try {
+            this.storage.get(BlobId.of(bucketName, BUFFER_NAME_GCS))
+        } catch (e: StorageException) {
+            LOG.error("StorageException happened while loading buffer", e)
+            return buffer
+        } ?: return buffer
+        val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
+        for ((projectId, projectBuffer) in bufferGRPC.bufferMap.entries) {
+            buffer[projectId] = ConcurrentHashMap(projectBuffer.projectMap)
+        }
+        return buffer
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {
