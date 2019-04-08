@@ -683,22 +683,27 @@ class CosmasGoogleCloudService(
                     BlobInfo.newBuilder(BlobId.of(bucketName, BUFFER_NAME_GCS)).build(),
                     buffer.toByteArray())
         } catch (e: StorageException) {
-            LOG.error("StorageException happened at Cosmas", e)
+            LOG.error("StorageException happened while saving buffer", e)
         }
     }
 
     private fun loadBufferFromGCS(): ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>> {
         val buffer = ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
-        val bufferBytes: Blob = try {
+        val bufferBytes: Blob? = try {
             this.storage.get(BlobId.of(bucketName, BUFFER_NAME_GCS))
         } catch (e: StorageException) {
-            LOG.error("StorageException happened while loading buffer", e)
+            LOG.error("StorageException happened while loading buffer, starting with empty", e)
             return buffer
-        } ?: return buffer
-        LOG.info("Loading buffer from GCS")
-        val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
-        for ((projectId, projectBuffer) in bufferGRPC.bufferMap.entries) {
-            buffer[projectId] = ConcurrentHashMap(projectBuffer.projectMap)
+        }
+        if (bufferBytes == null) {
+            LOG.info("Starting with empty buffer")
+        } else {
+            LOG.info("Loading buffer from GCS")
+            val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
+            for ((projectId, projectBuffer) in bufferGRPC.bufferMap.entries) {
+                buffer[projectId] = ConcurrentHashMap(projectBuffer.projectMap)
+            }
+            LOG.info("Starting with buffer from GCS")
         }
         return buffer
     }

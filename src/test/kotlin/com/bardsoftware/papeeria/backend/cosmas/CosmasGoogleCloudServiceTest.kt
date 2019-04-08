@@ -950,7 +950,6 @@ class CosmasGoogleCloudServiceTest {
         val bufferBytes = storage.get(BlobId.of(BUCKET_NAME, CosmasGoogleCloudService.BUFFER_NAME_GCS))
         assertNotNull(bufferBytes)
         val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
-        println(bufferGRPC)
     }
 
     @Test
