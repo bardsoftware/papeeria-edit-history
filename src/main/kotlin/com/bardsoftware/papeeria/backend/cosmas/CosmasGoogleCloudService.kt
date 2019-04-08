@@ -575,7 +575,7 @@ class CosmasGoogleCloudService(
             if (latestVersionBlob != null) {
                 return latestVersionBlob
             }
-            curFileId = prevIds[fileId] ?: return null
+            curFileId = prevIds[curFileId] ?: return null
         }
     }
 
@@ -615,7 +615,6 @@ class CosmasGoogleCloudService(
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) = logging(
             "restoreDeletedFile", request.info.projectId, request.oldFileId,
             other = mapOf("newFileId" to request.newFileId)) {
-        LOG.info("")
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -689,7 +688,7 @@ class CosmasGoogleCloudService(
             }
         }
         this.storage.create(
-                BlobInfo.newBuilder(this.bucketName, "${info.projectId}-fileIdMap").build(),
+                getBlobInfo("${info.projectId}-fileIdMap", info),
                 CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
     }
 
