@@ -37,6 +37,14 @@ message FileInfo {
     string fileId = 2;
 }
 
+message VersionsName {
+    map<int64, string> generationToName = 1;
+}
+
+message Dictionary {
+    map<string, VersionsName> filesToVersionsName = 1;
+}
+
 message FileTomb {
     string fileId = 1;
     string fileName = 2;
@@ -179,6 +187,17 @@ message ChangeFileIdRequest {
 message ChangeFileIdResponse {
 }
 
+message RenameVersionRequest {
+    ProjectInfo info = 1;
+    string fileId = 2;
+    int64 generation = 3;
+    string name = 4;
+}
+
+message RenameVersionResponse {
+
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -202,5 +221,7 @@ service Cosmas {
     rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
     }
     rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
+    }
+    rpc RenameVersion (RenameVersionRequest) returns (RenameVersionResponse) {
     }
 }

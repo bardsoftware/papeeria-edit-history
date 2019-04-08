@@ -499,7 +499,7 @@ class CosmasGoogleCloudService(
             return@logging
         }
 
-        val response = DeleteFileResponse.newBuilder().build()
+        val response = DeleteFileResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
@@ -592,7 +592,6 @@ class CosmasGoogleCloudService(
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) = logging(
             "restoreDeletedFile", request.info.projectId, request.oldFileId,
                     other = mapOf("newFileId" to request.newFileId)) {
-        LOG.info("")
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -654,6 +653,46 @@ class CosmasGoogleCloudService(
                     project.remove(change.oldFileId)
                 }
             }
+        }
+    }
+
+    override fun renameVersion(request: RenameVersionRequest,
+                               responseObserver: StreamObserver<RenameVersionResponse>) = logging(
+            "restoreDeletedFile", request.info.projectId, request.fileId) {
+        val dictionaryName = "${request.info.projectId}-dictionary"
+        val dictionary = try {
+           loadDictionary(request.info)
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+
+        val versionsName = dictionary.filesToVersionsNameMap
+                .getOrPut(request.fileId) { VersionsName.getDefaultInstance() }
+
+        versionsName.generationToNameMap[request.generation] = request.name
+
+        try {
+            this.storage.create(
+                    getBlobInfo(dictionaryName, request.info),
+                    dictionary.toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+
+        val response = RenameVersionResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    private fun loadDictionary(info: ProjectInfo): Dictionary {
+        val dictionaryName = "${info.projectId}-dictionary"
+        val dictionaryBytes: Blob? = this.storage.get(getBlobId(dictionaryName, info))
+        return if (dictionaryBytes == null) {
+            Dictionary.getDefaultInstance()
+        } else {
+            Dictionary.parseFrom(dictionaryBytes.getContent())
         }
     }
 
