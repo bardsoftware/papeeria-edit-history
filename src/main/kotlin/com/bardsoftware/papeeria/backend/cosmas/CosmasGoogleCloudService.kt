@@ -82,8 +82,7 @@ class CosmasGoogleCloudService(
         private val windowMaxSize: Int = 10,
         private val bufferSaveExecutor: ExecutorService = Executors.newSingleThreadExecutor()) : CosmasGrpc.CosmasImplBase() {
 
-
-    private val fileBuffer = loadBufferFromGCS()
+    val fileBuffer = loadBufferFromGCS()
 
     companion object {
         fun md5Hash(text: String): String {
@@ -667,6 +666,7 @@ class CosmasGoogleCloudService(
     }
 
     private fun saveBufferToGCS() {
+        LOG.info("Saving buffer to GCS")
         val projects = mutableMapOf<String, ProjectBuffer>()
         for ((projectId, project) in this.fileBuffer.entries) {
             synchronized(project) {
@@ -695,6 +695,7 @@ class CosmasGoogleCloudService(
             LOG.error("StorageException happened while loading buffer", e)
             return buffer
         } ?: return buffer
+        LOG.info("Loading buffer from GCS")
         val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
         for ((projectId, projectBuffer) in bufferGRPC.bufferMap.entries) {
             buffer[projectId] = ConcurrentHashMap(projectBuffer.projectMap)

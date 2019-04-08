@@ -39,6 +39,8 @@ import java.io.IOException
 import java.time.Clock
 import java.time.Month
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 
 /**
@@ -916,7 +918,7 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
-    fun changeFileIdSavingBuffer() {
+    fun changeFileIdSavingBufferSubmitting() {
         val bufferSaveExecutor = mock(ExecutorService::class.java)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service,
                 getMockedClock(), bufferSaveExecutor = bufferSaveExecutor)
@@ -931,6 +933,47 @@ class CosmasGoogleCloudServiceTest {
         assertEquals("lol", getFileFromService(1, "2"))
         verify(bufferSaveExecutor).submit(any(Runnable::class.java))
     }
+
+    @Test
+    fun changeFileIdSavingBufferToGRPC() {
+        val bufferSaveExecutor = Executors.newSingleThreadExecutor()
+        val storage = LocalStorageHelper.getOptions().service
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, storage,
+                getMockedClock(), bufferSaveExecutor = bufferSaveExecutor)
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+
+        bufferSaveExecutor.shutdown()
+        assertTrue(bufferSaveExecutor.awaitTermination(2, TimeUnit.SECONDS))
+        val bufferBytes = storage.get(BlobId.of(BUCKET_NAME, CosmasGoogleCloudService.BUFFER_NAME_GCS))
+        assertNotNull(bufferBytes)
+        val bufferGRPC = Buffer.parseFrom(bufferBytes.getContent())
+        println(bufferGRPC)
+    }
+
+    @Test
+    fun changeFileIdSaveAndLoad() {
+        val bufferSaveExecutor = Executors.newSingleThreadExecutor()
+        val storage = LocalStorageHelper.getOptions().service
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, storage, getMockedClock(),
+                bufferSaveExecutor = bufferSaveExecutor)
+        val patch1 = diffPatch(USER_ID, "", "kek", 1)
+        addPatchToService(patch1)
+        commit()
+        changeFileId("2")
+
+        bufferSaveExecutor.shutdown()
+        assertTrue(bufferSaveExecutor.awaitTermination(2, TimeUnit.SECONDS))
+        val bufferBytes = storage.get(BlobId.of(BUCKET_NAME, CosmasGoogleCloudService.BUFFER_NAME_GCS))
+        assertNotNull(bufferBytes)
+
+        // Loading buffer from storage in constructor
+        val newService = CosmasGoogleCloudService(this.BUCKET_NAME, storage, getMockedClock())
+        assertEquals(this.service.fileBuffer, newService.fileBuffer)
+    }
+
     @Test
     fun changeFileIdWithPatch() {
         val patch1 = diffPatch(USER_ID, "", "kek", 1)
