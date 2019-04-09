@@ -687,14 +687,14 @@ class CosmasGoogleCloudService(
         }
 
         this.storage.create(
-                getBlobInfo("${info.projectId}-fileIdMap", info),
-                CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
+                getBlobInfo("${info.projectId}-fileIdChangeMap", info),
+                CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
     }
 
     private fun getPrevIds(projectId: String): Map<String, String> {
-        val mapName = "$projectId-fileIdMap"
+        val mapName = "$projectId-fileIdChangeMap"
         val mapBytes: Blob = this.storage.get(BlobId.of(this.bucketName, mapName)) ?: return mapOf()
-        return CosmasProto.FileIdMap.parseFrom(mapBytes.getContent()).prevIdsMap
+        return CosmasProto.FileIdChangeMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {

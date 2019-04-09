@@ -37,7 +37,7 @@ message FileInfo {
     string fileId = 2;
 }
 
-message FileIdMap {
+message FileIdChangeMap {
     map<string, string> prevIds = 1;
 }
 
