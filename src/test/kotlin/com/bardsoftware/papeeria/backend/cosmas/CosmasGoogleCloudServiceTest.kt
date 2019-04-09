@@ -1159,7 +1159,8 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun addManyVersions(count: Long, windowMaxSize: Int, clock: Clock = getMockedClock(),
-                                fakeStorage: Storage = mock(Storage::class.java), userName: String = "") {
+                                fakeStorage: Storage = mock(Storage::class.java),
+                                userName: String = "") {
 
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, clock, windowMaxSize = windowMaxSize)
 
@@ -1289,7 +1290,6 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3, isFreePlan = false))
     }
 
-
     @Test
     fun renameWithNotEmptyDictionary() {
         val fakeStorage = mock(Storage::class.java)
@@ -1315,6 +1315,24 @@ class CosmasGoogleCloudServiceTest {
                 .build()
         Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(dictionaryName, projectInfo())),
                 eq(dictionary.toByteArray()))
+    }
+
+    @Test
+    fun getVersionsListWithName() {
+        val fakeStorage = mock(Storage::class.java)
+        val dictionaryName = "$PROJECT_ID-dictionary"
+        val dictionary = Dictionary.newBuilder()
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersionButOtherFile")
+                        .build())
+                .build()
+        val dictionaryBlob = getMockedBlobWithDictionary(dictionary)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
+                .thenReturn(dictionaryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        addManyVersions(1, 10, fakeStorage = fakeStorage)
+        val versions = getFullVersionsList()
+        assertEquals(versions[0].versionName, "SuperVersionButOtherFile")
     }
 
     @Test
@@ -1460,12 +1478,13 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun createFileVersionInfo(generation: Long, timeStamp: Long = 0L,
-                                      fileId: String = FILE_ID, userName: String = ""): FileVersionInfo {
+                                      fileId: String = FILE_ID, userName: String = "", versionName: String = ""): FileVersionInfo {
         return FileVersionInfo.newBuilder()
                 .setFileId(fileId)
                 .setGeneration(generation)
                 .setTimestamp(timeStamp)
                 .setUserName(userName)
+                .setVersionName(versionName)
                 .build()
     }
 
