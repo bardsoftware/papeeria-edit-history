@@ -669,21 +669,22 @@ class CosmasGoogleCloudService(
             "restoreDeletedFile", request.info.projectId, request.fileId) {
         val dictionaryName = "${request.info.projectId}-dictionary"
         val dictionary = try {
-           loadDictionary(request.info)
+           loadDictionary(request.info).toBuilder()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
         }
 
         val versionsName = dictionary.filesToVersionsNameMap
-                .getOrPut(request.fileId) { VersionsName.getDefaultInstance() }
+                .getOrDefault(request.fileId, VersionsName.getDefaultInstance())
 
-        versionsName.generationToNameMap[request.generation] = request.name
-
+        dictionary.putFilesToVersionsName(request.fileId, versionsName.toBuilder()
+                .putGenerationToName(request.generation, request.name)
+                .build())
         try {
             this.storage.create(
                     getBlobInfo(dictionaryName, request.info),
-                    dictionary.toByteArray())
+                    dictionary.build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging

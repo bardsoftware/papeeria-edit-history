@@ -1289,6 +1289,98 @@ class CosmasGoogleCloudServiceTest {
         assertEquals(listOf(2L), getVersionsList(FILE_ID, PROJECT_ID, 3, isFreePlan = false))
     }
 
+
+    @Test
+    fun renameWithNotEmptyDictionary() {
+        val fakeStorage = mock(Storage::class.java)
+        val dictionaryName = "$PROJECT_ID-dictionary"
+        val dictionaryBefore = Dictionary.newBuilder()
+                .putFilesToVersionsName("2", VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersionButOtherFile")
+                        .build())
+                .build()
+        val dictionaryBlob = getMockedBlobWithDictionary(dictionaryBefore)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
+                .thenReturn(dictionaryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        renameVersion(1L, "SuperVersion")
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(dictionaryName, projectInfo())))
+        val dictionary = Dictionary.newBuilder()
+                .putFilesToVersionsName("2", VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersionButOtherFile")
+                        .build())
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersion")
+                        .build())
+                .build()
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(dictionaryName, projectInfo())),
+                eq(dictionary.toByteArray()))
+    }
+
+    @Test
+    fun renameWithNotEmptyDictionaryManyVersions() {
+        val fakeStorage = mock(Storage::class.java)
+        val dictionaryName = "$PROJECT_ID-dictionary"
+        val dictionaryBefore = Dictionary.newBuilder()
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(2L, "SuperVersionAnotherGeneration")
+                        .putGenerationToName(3L, "AndAnotherOne")
+                        .build())
+                .build()
+        val dictionaryBlob = getMockedBlobWithDictionary(dictionaryBefore)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
+                .thenReturn(dictionaryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        renameVersion(1L, "SuperVersion")
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(dictionaryName, projectInfo())))
+        val dictionary = Dictionary.newBuilder()
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(2L, "SuperVersionAnotherGeneration")
+                        .putGenerationToName(3L, "AndAnotherOne")
+                        .putGenerationToName(1L, "SuperVersion")
+                        .build())
+                .build()
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(dictionaryName, projectInfo())),
+                eq(dictionary.toByteArray()))
+    }
+
+    @Test
+    fun renameWithEmptyDictionary() {
+        val fakeStorage = mock(Storage::class.java)
+        val dictionaryName = "$PROJECT_ID-dictionary"
+        val emptyDictionaryBlob = getMockedBlobWithDictionary(Dictionary.getDefaultInstance())
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
+                .thenReturn(emptyDictionaryBlob)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        renameVersion(1L, "SuperVersion")
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(dictionaryName, projectInfo())))
+        val dictionary = Dictionary.newBuilder()
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersion")
+                        .build())
+                .build()
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(dictionaryName, projectInfo())),
+                eq(dictionary.toByteArray()))
+    }
+
+    @Test
+    fun renameWithNullDictionary() {
+        val fakeStorage = mock(Storage::class.java)
+        val dictionaryName = "$PROJECT_ID-dictionary"
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
+                .thenReturn(null)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        renameVersion(1L, "SuperVersion")
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(dictionaryName, projectInfo())))
+        val dictionary = Dictionary.newBuilder()
+                .putFilesToVersionsName(FILE_ID, VersionsName.newBuilder()
+                        .putGenerationToName(1L, "SuperVersion")
+                        .build())
+                .build()
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(dictionaryName, projectInfo())),
+                eq(dictionary.toByteArray()))
+    }
+
     private fun getStreamRecorderAndRequestForGettingVersion(version: Long, fileId: String = FILE_ID,
                                                              info: ProjectInfo = projectInfo()):
             Pair<StreamRecorder<GetVersionResponse>, GetVersionRequest> {
@@ -1467,6 +1559,19 @@ class CosmasGoogleCloudServiceTest {
         return deleteFileRecorder
     }
 
+    private fun renameVersion(generation: Long, name: String, fileId: String = FILE_ID,
+                           info: ProjectInfo = projectInfo()): StreamRecorder<RenameVersionResponse> {
+        val recorder: StreamRecorder<RenameVersionResponse> = StreamRecorder.create()
+        val request = RenameVersionRequest.newBuilder()
+                .setGeneration(generation)
+                .setName(name)
+                .setFileId(fileId)
+                .setInfo(info)
+                .build()
+        this.service.renameVersion(request, recorder)
+        return recorder
+    }
+
     private fun deleteFiles(files: List<DeletedFileInfo>, time: Long,
                             info: ProjectInfo = projectInfo()): StreamRecorder<DeleteFilesResponse> {
         val deleteFileRecorder: StreamRecorder<DeleteFilesResponse> = StreamRecorder.create()
@@ -1519,6 +1624,13 @@ class CosmasGoogleCloudServiceTest {
         val blob = mock(Blob::class.java)
         Mockito.`when`(blob.getContent())
                 .thenReturn(cemetery.toByteArray())
+        return blob
+    }
+
+    private fun getMockedBlobWithDictionary(dictionary: Dictionary): Blob {
+        val blob = mock(Blob::class.java)
+        Mockito.`when`(blob.getContent())
+                .thenReturn(dictionary.toByteArray())
         return blob
     }
 
