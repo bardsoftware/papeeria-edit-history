@@ -168,6 +168,8 @@ class CosmasGoogleCloudService(
             return@logging
         }
 
+        val prevIds = getPrevIds(request.info.projectId).toMutableMap()
+
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
@@ -202,6 +204,12 @@ class CosmasGoogleCloudService(
                                     .build()
                             response.addBadFiles(badFile)
                         }
+                        var curFileId = fileId
+                        while (curFileId in prevIds) {
+                            val nextFileId = prevIds[curFileId]
+                            prevIds.remove(curFileId)
+                            curFileId = nextFileId
+                        }
                     } catch (e: Throwable) {
                         LOG.error("Error while applying patches", e)
                         when (e) {
@@ -217,10 +225,14 @@ class CosmasGoogleCloudService(
 
                     }
                 }
+                this.storage.create(
+                        getBlobInfo("${request.info.projectId}-fileIdChangeMap", request.info),
+                        CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return@logging
             }
+
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
