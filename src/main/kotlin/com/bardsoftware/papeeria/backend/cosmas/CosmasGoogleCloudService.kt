@@ -168,11 +168,10 @@ class CosmasGoogleCloudService(
             return@logging
         }
 
-        val prevIds = getPrevIds(request.info.projectId).toMutableMap()
-
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
+                val prevIds = getPrevIds(request.info.projectId).toMutableMap()
                 for ((fileId, fileVersion) in project.asMap()) {
                     try {
                         MDC.clear()
