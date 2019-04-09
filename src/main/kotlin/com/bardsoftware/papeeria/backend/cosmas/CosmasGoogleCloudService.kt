@@ -658,7 +658,7 @@ class CosmasGoogleCloudService(
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) = logging(
             "changeFileId", request.info.projectId) {
         LOG.info("""Request:
-          |${request}
+          |$request
         """.trimMargin())
         try {
             changeFileId(request.info, request.changesList)
@@ -677,16 +677,15 @@ class CosmasGoogleCloudService(
             this.fileBuffer.getOrPut(info.projectId) { createProjectCacheLoader(info) }
         }
         val prevIds = getPrevIds(info.projectId).toMutableMap()
-        if (project != null) {
-            synchronized(project) {
-                for (change in changes) {
-                    prevIds[change.newFileId] = change.oldFileId
-                    val oldVersion = project[change.oldFileId]
-                    project.put(change.newFileId, oldVersion)
-                    project.invalidate(change.oldFileId)
-                }
+        synchronized(project) {
+            for (change in changes) {
+                prevIds[change.newFileId] = change.oldFileId
+                val oldVersion = project[change.oldFileId]
+                project.put(change.newFileId, oldVersion)
+                project.invalidate(change.oldFileId)
             }
         }
+
         this.storage.create(
                 getBlobInfo("${info.projectId}-fileIdMap", info),
                 CosmasProto.FileIdMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
