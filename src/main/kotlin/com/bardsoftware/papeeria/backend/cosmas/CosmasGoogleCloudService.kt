@@ -308,9 +308,17 @@ class CosmasGoogleCloudService(
         } else {
             31 * day
         }
+        val dictionary = loadDictionary(request.info)
         for (version in versionList) {
             // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
             if (version.timestamp + ttl > curTime) {
+                // Setting version name if dictionary contains it, empty string otherwise
+                version.toBuilder()
+                        .setVersionName(dictionary.filesToVersionsNameMap[version.fileId]
+                                ?.generationToNameMap
+                                ?.get(version.generation)
+                                ?: "")
+                        .build()
                 actualVersionList.add(version)
             } else {
                 break

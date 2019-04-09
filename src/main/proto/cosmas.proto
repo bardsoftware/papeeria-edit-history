@@ -30,6 +30,7 @@ message FileVersionInfo {
     int64 timestamp = 2;
     string fileId = 3;
     string userName = 4;
+    string versionName = 5;
 }
 
 message FileInfo {
