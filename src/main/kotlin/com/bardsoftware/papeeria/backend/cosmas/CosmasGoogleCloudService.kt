@@ -250,6 +250,7 @@ class CosmasGoogleCloudService(
         val newVersion = fileVersion.toBuilder()
                 .setContent(ByteString.copyFromUtf8(newText))
                 .setTimestamp(curTime)
+                .setFileId(fileId)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
         // User who made last patch
@@ -603,10 +604,12 @@ class CosmasGoogleCloudService(
             latestVersion.patchesList.last().userName
         }
 
+        val latestFileId = if (latestVersion.fileId.isBlank()) fileId else latestVersion.fileId
+
         // Preparing new version in memory to replace bad or nonexistent one in buffer
         // Window should point to the latest N versions
         val latestVersionInfo = FileVersionInfo.newBuilder()
-                .setFileId(fileId)
+                .setFileId(latestFileId)
                 // For in-memory storage implementation resultBlob.generation == null,
                 // but in this case we don't care about generation value, so I set it to 1L
                 .setGeneration(latestVersionBlob.generation ?: 1L)
