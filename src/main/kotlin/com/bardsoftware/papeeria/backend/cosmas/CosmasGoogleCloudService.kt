@@ -250,6 +250,7 @@ class CosmasGoogleCloudService(
         val newVersion = fileVersion.toBuilder()
                 .setContent(ByteString.copyFromUtf8(newText))
                 .setTimestamp(curTime)
+                .setFileId(fileId)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
         // User who made last patch
@@ -603,10 +604,19 @@ class CosmasGoogleCloudService(
             latestVersion.patchesList.last().userName
         }
 
+        // In most cases latestVersion.fileId == fileId
+        // However, when file changes its id (e.g. because of Dropbox import), we can
+        // read its latest blob thanks to fileIdChangeMap, and latestVersion from this blob
+        // will have different fileId, so we should add to latestVersion's window FileVersionInfo
+        // with fileId of latestVersion.
+        // In reality this makes the latest version unavailable, while previous versions
+        // are still available.
+        val latestFileId = if (latestVersion.fileId.isBlank()) fileId else latestVersion.fileId
+
         // Preparing new version in memory to replace bad or nonexistent one in buffer
         // Window should point to the latest N versions
         val latestVersionInfo = FileVersionInfo.newBuilder()
-                .setFileId(fileId)
+                .setFileId(latestFileId)
                 // For in-memory storage implementation resultBlob.generation == null,
                 // but in this case we don't care about generation value, so I set it to 1L
                 .setGeneration(latestVersionBlob.generation ?: 1L)
