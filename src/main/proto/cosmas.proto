@@ -44,6 +44,10 @@ message VersionsName {
 
 message Dictionary {
     map<string, VersionsName> filesToVersionsName = 1;
+}    
+
+message FileIdChangeMap {
+    map<string, string> prevIds = 1;
 }
 
 message FileTomb {
