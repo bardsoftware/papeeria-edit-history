@@ -604,6 +604,13 @@ class CosmasGoogleCloudService(
             latestVersion.patchesList.last().userName
         }
 
+        // In most cases latestVersion.fileId == fileId
+        // However, when file changes its id (e.g. because of Dropbox import), we can
+        // read its latest blob thanks to fileIdChangeMap, and latestVersion from this blob
+        // will have different fileId, so we should add to latestVersion's window FileVersionInfo
+        // with fileId of latestVersion.
+        // In reality this makes the latest version unavailable, while previous versions
+        // are still available.
         val latestFileId = if (latestVersion.fileId.isBlank()) fileId else latestVersion.fileId
 
         // Preparing new version in memory to replace bad or nonexistent one in buffer
