@@ -171,7 +171,7 @@ class CosmasGoogleCloudService(
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
-                val prevIds = getPrevIds(request.info.projectId).toMutableMap()
+                val prevIds = getPrevIds(request.info).toMutableMap()
                 for ((fileId, fileVersion) in project.asMap()) {
                     try {
                         MDC.clear()
@@ -579,7 +579,7 @@ class CosmasGoogleCloudService(
     }
 
     private fun getLatestVersionBlob(fileId: String, projectInfo: ProjectInfo): Blob? {
-        val prevIds = getPrevIds(projectInfo.projectId)
+        val prevIds = getPrevIds(projectInfo)
         var curFileId = fileId
         while (true) {
             val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, projectInfo))
@@ -687,7 +687,7 @@ class CosmasGoogleCloudService(
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getOrPut(info.projectId) { createProjectCacheLoader(info) }
         }
-        val prevIds = getPrevIds(info.projectId).toMutableMap()
+        val prevIds = getPrevIds(info).toMutableMap()
         synchronized(project) {
             for (change in changes) {
                 prevIds[change.newFileId] = change.oldFileId
@@ -702,9 +702,9 @@ class CosmasGoogleCloudService(
                 CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
     }
 
-    private fun getPrevIds(projectId: String): Map<String, String> {
-        val mapName = "$projectId-fileIdChangeMap"
-        val mapBytes: Blob = this.storage.get(BlobId.of(this.bucketName, mapName)) ?: return mapOf()
+    private fun getPrevIds(info: ProjectInfo): Map<String, String> {
+        val mapName = "${info.projectId}-fileIdChangeMap"
+        val mapBytes: Blob = this.storage.get(getBlobId(mapName, info)) ?: return mapOf()
         return CosmasProto.FileIdChangeMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 

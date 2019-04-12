@@ -999,7 +999,7 @@ class CosmasGoogleCloudServiceTest {
                 .build()
         val map2Blob = getMockedBlobWithFileIdChangeMap(map2)
         val emptyBlob = getMockedBlobWithFileIdChangeMap(FileIdChangeMap.getDefaultInstance())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(null)
 
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
@@ -1008,26 +1008,26 @@ class CosmasGoogleCloudServiceTest {
         val patch3 = diffPatch(USER_ID, "ver2", "ver3", 3)
         addPatchToService(patch1)
         commit()
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(emptyBlob)
         changeFileId("2")
 
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map1.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map1Blob)
 
         addPatchToService(patch2, "2")
         commit()
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(emptyBlob)
         changeFileId("3", "2")
 
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map2.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map2Blob)
 
         addPatchToService(patch3, "3")
@@ -1069,7 +1069,7 @@ class CosmasGoogleCloudServiceTest {
                 .build()
         val map2Blob = getMockedBlobWithFileIdChangeMap(map2)
         val emptyBlob = getMockedBlobWithFileIdChangeMap(FileIdChangeMap.getDefaultInstance())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(null)
 
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
@@ -1077,14 +1077,14 @@ class CosmasGoogleCloudServiceTest {
         val patch3 = diffPatch(USER_ID, "ver2", "ver3", 3)
         addPatchToService(patch1)
         commit()
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(emptyBlob)
         changeFileId("2")
 
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map1.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map1Blob)
 
 
@@ -1093,7 +1093,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map2.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map2Blob)
 
         addPatchToService(patch3, "3")
@@ -1135,7 +1135,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map1.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map1Blob)
 
 
@@ -1144,7 +1144,7 @@ class CosmasGoogleCloudServiceTest {
         Mockito.verify(fakeStorage).create(
                 this.service.getBlobInfo("$PROJECT_ID-fileIdChangeMap", projectInfo()),
                 map2.toByteArray())
-        Mockito.`when`(fakeStorage.get(eq(BlobId.of(BUCKET_NAME, "$PROJECT_ID-fileIdChangeMap"))))
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId("$PROJECT_ID-fileIdChangeMap", projectInfo()))))
                 .thenReturn(map2Blob)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
 
