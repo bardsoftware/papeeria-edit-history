@@ -22,7 +22,7 @@ apply plugin: 'application'
 
 
 group 'com.bardsoftware.papeeria.backend.cosmas'
-version '1.0-SNAPSHOT'
+version '2019.04.12'
 
 sourceSets {
     main {
