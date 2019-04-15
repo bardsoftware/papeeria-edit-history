@@ -487,16 +487,13 @@ class CosmasGoogleCloudService(
 
         val curTime = clock.millis()
         val ttl = getTTL(request.info)
-        val newCemeteryList = cemetery.cemeteryList.filter {
-            it.removalTimestamp + ttl > curTime
-        }
-        cemetery.clearCemetery()
-        cemetery.addAllCemetery(newCemeteryList)
+        val tombs = cemetery.cemeteryList.toMutableList()
+        tombs.removeIf { it.removalTimestamp + ttl < curTime }
 
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
-                    cemetery.build().toByteArray())
+                    cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
@@ -535,7 +532,7 @@ class CosmasGoogleCloudService(
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
-                    cemetery.addCemetery(newTomb).build().toByteArray())
+                    cemetery.clearCemetery().addAllCemetery(tombs).addCemetery(newTomb).build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
