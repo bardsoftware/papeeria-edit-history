@@ -111,6 +111,15 @@ class CosmasGoogleCloudService(
         }
     }
 
+    private fun getTTL(info: ProjectInfo): Long {
+        val day: Long = 24 * 60 * 60 * 1000
+        return if (info.isFreePlan) {
+            day
+        } else {
+            31 * day
+        }
+    }
+
     fun hashUserId(userId: String) = md5Hash(userId)
 
     fun fileStorageName(fileId: String, info: ProjectInfo): String = hashUserId(info.ownerId) + "/" + fileId
@@ -327,12 +336,7 @@ class CosmasGoogleCloudService(
         }
         val actualVersionList = mutableListOf<FileVersionInfo>()
         val curTime = clock.millis()
-        val day: Long = 24 * 60 * 60 * 1000
-        val ttl = if (request.info.isFreePlan) {
-            day
-        } else {
-            31 * day
-        }
+        val ttl = getTTL(request.info)
         for (version in versionList) {
             // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
             if (version.timestamp + ttl > curTime) {
@@ -481,6 +485,14 @@ class CosmasGoogleCloudService(
             LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
         }
 
+        val curTime = clock.millis()
+        val ttl = getTTL(request.info)
+        val newCemeteryList = cemetery.cemeteryList.filter {
+            it.removalTimestamp + ttl > curTime
+        }
+        cemetery.clearCemetery()
+        cemetery.addAllCemetery(newCemeteryList)
+
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
@@ -516,6 +528,10 @@ class CosmasGoogleCloudService(
         } else {
             FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
         }
+        val curTime = clock.millis()
+        val ttl = getTTL(request.info)
+        val tombs = cemetery.cemeteryList.toMutableList()
+        tombs.removeIf { it.removalTimestamp + ttl > curTime }
         try {
             this.storage.create(
                     getBlobInfo(cemeteryName, request.info),
