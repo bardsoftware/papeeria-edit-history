@@ -162,6 +162,7 @@ message ForcedFileCommitRequest {
     string fileId = 2;
     int64 timestamp = 3;
     bytes actualContent = 4;
+    string userName = 5;
 }
 
 message ForcedFileCommitResponse {
