@@ -19,6 +19,8 @@ import com.google.api.gax.paging.Page
 import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.storage.*
 import com.google.common.base.Charsets
+import com.google.common.cache.CacheBuilder
+import com.google.common.cache.CacheLoader
 import com.google.common.cache.LoadingCache
 import com.google.common.hash.Hashing
 import com.google.protobuf.ByteString
@@ -32,8 +34,6 @@ import org.threeten.bp.Duration
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
-import com.google.common.cache.CacheLoader
-import com.google.common.cache.CacheBuilder
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -188,7 +188,7 @@ class CosmasGoogleCloudService(
                         val newText = PatchCorrector.applyPatch(patches, text)
                         val cosmasHash = md5Hash(newText)
                         if (patches.last().actualHash == cosmasHash) {
-                            commitFromMemoryToGCS(request.info, fileId, newText)
+                            commitFromMemoryToGCS(request.info, fileId, ByteString.copyFromUtf8(newText), null)
                             LOG.info("File has been committed")
                         } else {
                             val actualHash = patches.last().actualHash
@@ -241,20 +241,20 @@ class CosmasGoogleCloudService(
     // only by applying patches to version in memory. In "commit" we re applying patches
     // before we re calling this method, so we dont want to do it again.
     // In "forcedCommit" new text version is given in request.
-    private fun commitFromMemoryToGCS(projectInfo: ProjectInfo, fileId: String, newText: String) {
+    private fun commitFromMemoryToGCS(projectInfo: ProjectInfo, fileId: String, newBytes: ByteString, userName: String?) {
         val project = this.fileBuffer[projectInfo.projectId] ?: return
         val fileVersion = project[fileId] ?: return
 
         // Just committing buffered version with new content and current timestamp to GCS
         val curTime = clock.millis()
         val newVersion = fileVersion.toBuilder()
-                .setContent(ByteString.copyFromUtf8(newText))
+                .setContent(newBytes)
                 .setTimestamp(curTime)
                 .setFileId(fileId)
         val resBlob = this.storage.create(getBlobInfo(fileId, projectInfo), newVersion.build().toByteArray())
 
         // User who made last patch
-        val userName = newVersion.patchesList.last().userName
+        val commitAuthor = userName ?: newVersion.patchesList.last().userName
 
         // Preparing version in memory to save following invariants for it:
         // 1) History window points to the latest N versions in GCS
@@ -266,7 +266,7 @@ class CosmasGoogleCloudService(
                 // but in this case we don't care about generation value, so I set it to 1L
                 .setGeneration(resBlob.generation ?: 1L)
                 .setTimestamp(curTime)
-                .setUserName(userName)
+                .setUserName(commitAuthor)
                 .build()
         val newWindow = buildNewWindow(newInfo, fileVersion.historyWindowList, windowMaxSize)
         project.put(fileId, newVersion
@@ -302,6 +302,7 @@ class CosmasGoogleCloudService(
             return@logging
         }
         response.file = CosmasProto.FileVersion.parseFrom(blob.getContent())
+        println("File size=${response.file.content.size()}")
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
@@ -565,13 +566,16 @@ class CosmasGoogleCloudService(
                 handleStorageException(e, responseObserver)
                 return@logging
             }
-            val actualText = request.actualContent.toStringUtf8()
+            if (request.actualContent.isValidUtf8) {
+                val actualText = request.actualContent.toStringUtf8()
 
-            val patch = getDiffPatch(versionToCommit.content.toStringUtf8(), actualText, request.timestamp)
-            project.put(request.fileId, versionToCommit.toBuilder().addPatches(patch).build())
-
-            // Committing correct version from buffer to GCS
-            commitFromMemoryToGCS(request.info, request.fileId, actualText)
+                val patch = getDiffPatch(versionToCommit.content.toStringUtf8(), actualText, request.timestamp)
+                project.put(request.fileId, versionToCommit.toBuilder().addPatches(patch).build())
+                // Committing correct version from buffer to GCS
+                commitFromMemoryToGCS(request.info, request.fileId, ByteString.copyFromUtf8(actualText), null)
+            } else {
+                commitFromMemoryToGCS(request.info, request.fileId, request.actualContent, request.userName.ifEmpty { COSMAS_NAME })
+            }
         }
 
         val response = CosmasProto.ForcedFileCommitResponse.newBuilder().build()
