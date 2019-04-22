@@ -19,6 +19,7 @@ import com.google.api.gax.paging.Page
 import com.google.api.gax.retrying.RetrySettings
 import com.google.cloud.storage.*
 import com.google.common.base.Charsets
+import com.google.common.cache.LoadingCache
 import com.google.common.hash.Hashing
 import com.google.protobuf.ByteString
 import io.grpc.Status
@@ -30,8 +31,9 @@ import org.slf4j.MDC
 import org.threeten.bp.Duration
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentMap
 import kotlin.math.min
+import com.google.common.cache.CacheLoader
+import com.google.common.cache.CacheBuilder
 
 
 private val LOG = LoggerFactory.getLogger("CosmasGoogleCloudService")
@@ -40,7 +42,8 @@ private fun labels(entries: Map<String, String>) {
     entries.forEach { if (it.value.isNotBlank()) MDC.put(it.key, it.value) }
 }
 
-private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "", other: Map<String, String> = mapOf(), body: () -> Unit) {
+private fun logging(funName: String, projectId: String, fileId: String = "", userId: String = "",
+                    other: Map<String, String> = mapOf(), body: () -> Unit) {
     labels(mapOf(
             "projectId" to projectId,
             "fileId" to fileId,
@@ -80,7 +83,15 @@ class CosmasGoogleCloudService(
 
 
     private val fileBuffer =
-            ConcurrentHashMap<String, ConcurrentMap<String, CosmasProto.FileVersion>>()
+            ConcurrentHashMap<String, LoadingCache<String, FileVersion>>()
+
+
+    private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
+            object : CacheLoader<String, FileVersion>() {
+                override fun load(fileId: String): FileVersion {
+                    return restoreFileFromStorage(fileId, info)
+                }
+            })
 
 
     companion object {
@@ -124,18 +135,18 @@ class CosmasGoogleCloudService(
         }
         logging("createPatch", request.info.projectId, request.fileId, request.patchesList.first().userId) {
             val project = synchronized(this.fileBuffer) {
-                this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
+                this.fileBuffer.getOrPut(request.info.projectId) { createProjectCacheLoader(request.info) }
             }
             synchronized(project) {
                 val fileVersion = try {
-                    project[request.fileId] ?: restoreFileFromStorage(request.fileId, request.info, project)
+                    project[request.fileId]
                 } catch (e: StorageException) {
                     handleStorageException(e, responseObserver)
                     return@logging
                 }
-                project[request.fileId] = fileVersion.toBuilder()
+                project.put(request.fileId, fileVersion.toBuilder()
                         .addAllPatches(request.patchesList)
-                        .build()
+                        .build())
             }
             val response: CosmasProto.CreatePatchResponse = CosmasProto.CreatePatchResponse
                     .newBuilder()
@@ -160,7 +171,8 @@ class CosmasGoogleCloudService(
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
-                for ((fileId, fileVersion) in project) {
+                val prevIds = getPrevIds(request.info.projectId).toMutableMap()
+                for ((fileId, fileVersion) in project.asMap()) {
                     try {
                         MDC.clear()
                         MDC.put("fileId", fileId)
@@ -182,13 +194,20 @@ class CosmasGoogleCloudService(
                             val actualHash = patches.last().actualHash
                             LOG.error("""Commit failure: hash mismatch.
                               |Hash after applying patches={}. Last hash supplied by client={}.
-                              |This means that the sequence of patches produces something different than actual file contents.""".trimMargin(),
+                              |This means that the sequence of patches produces something different
+                              | than actual file contents.""".trimMargin(),
                                     cosmasHash, actualHash)
                             val badFile = CosmasProto.FileInfo.newBuilder()
                                     .setFileId(fileId)
                                     .setProjectId(request.info.projectId)
                                     .build()
                             response.addBadFiles(badFile)
+                        }
+                        var curFileId = fileId
+                        while (curFileId in prevIds) {
+                            val nextFileId = prevIds[curFileId]
+                            prevIds.remove(curFileId)
+                            curFileId = nextFileId
                         }
                     } catch (e: Throwable) {
                         LOG.error("Error while applying patches", e)
@@ -205,10 +224,14 @@ class CosmasGoogleCloudService(
 
                     }
                 }
+                this.storage.create(
+                        getBlobInfo("${request.info.projectId}-fileIdChangeMap", request.info),
+                        CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return@logging
             }
+
         }
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
@@ -245,16 +268,17 @@ class CosmasGoogleCloudService(
                 .setUserName(userName)
                 .build()
         val newWindow = buildNewWindow(newInfo, fileVersion.historyWindowList, windowMaxSize)
-        project[fileId] = newVersion
+        project.put(fileId, newVersion
                 .clearPatches()
                 .clearHistoryWindow()
                 .addAllHistoryWindow(newWindow)
-                .build()
+                .build())
     }
 
     override fun getVersion(request: CosmasProto.GetVersionRequest,
                             responseObserver: StreamObserver<CosmasProto.GetVersionResponse>) = logging(
-            "getVersion", request.info.projectId, request.fileId, other = mapOf("generation" to request.generation.toString())) {
+            "getVersion", request.info.projectId, request.fileId,
+            other = mapOf("generation" to request.generation.toString())) {
         // if request.generation is -1, Cosmas will return the latest version of file
         val generation = if (request.generation == -1L) {
             null // In GCS if generation is null it returns the latest version
@@ -338,10 +362,9 @@ class CosmasGoogleCloudService(
 
     private fun getFileVersionListFromMemory(projectInfo: ProjectInfo, fileId: String): List<FileVersionInfo> {
         val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getOrPut(projectInfo.projectId) { ConcurrentHashMap() }
+            this.fileBuffer.getOrPut(projectInfo.projectId) { createProjectCacheLoader(projectInfo) }
         }
-        val fileVersion = this.fileBuffer[projectInfo.projectId]?.get(fileId)
-                ?: restoreFileFromStorage(fileId, projectInfo, project)
+        val fileVersion = project.get(fileId)
         return fileVersion.historyWindowList
     }
 
@@ -356,8 +379,7 @@ class CosmasGoogleCloudService(
         }
     }
 
-    private fun getPatchListAndPreviousText(fileName: String, timestamp: Long,
-                                            info: ProjectInfo): Pair<List<CosmasProto.Patch>, String> {
+    private fun getPatchListAndPreviousText(fileName: String, timestamp: Long): Pair<List<CosmasProto.Patch>, String> {
         val blobs: Page<Blob> = try {
             this.storage.list(bucketName, Storage.BlobListOption.versions(true),
                     Storage.BlobListOption.prefix(fileName))
@@ -390,10 +412,12 @@ class CosmasGoogleCloudService(
                 )) {
             // Timestamp of file version witch contains patch
             val versionTimestamp = FileVersion.parseFrom(
-                    this.storage.get(getBlobId(request.fileId, request.info, request.generation)).getContent()).timestamp
+                    this.storage.get(getBlobId(request.fileId, request.info, request.generation)).getContent()
+            ).timestamp
             // Text of version from which patch was applied (version before version witch contains patch)
             val (patchList, text) = try {
-                getPatchListAndPreviousText(fileStorageName(request.fileId, request.info), versionTimestamp, request.info)
+                getPatchListAndPreviousText(fileStorageName(request.fileId, request.info),
+                        versionTimestamp)
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return@logging
@@ -479,7 +503,8 @@ class CosmasGoogleCloudService(
 
     override fun deleteFile(request: CosmasProto.DeleteFileRequest,
                             responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
-            "deleteFile", request.info.projectId, request.fileId, other = mapOf("fileName" to request.fileName)) {
+            "deleteFile", request.info.projectId, request.fileId,
+            other = mapOf("fileName" to request.fileName)) {
         val cemeteryName = "${request.info.projectId}-cemetery"
         val cemeteryBytes: Blob? = try {
             this.storage.get(getBlobId(cemeteryName, request.info))
@@ -536,12 +561,12 @@ class CosmasGoogleCloudService(
                                   responseObserver: StreamObserver<CosmasProto.ForcedFileCommitResponse>) = logging(
             "forcedFileCommit", request.info.projectId, request.fileId) {
         val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getOrPut(request.info.projectId) { ConcurrentHashMap() }
+            this.fileBuffer.getOrPut(request.info.projectId) { createProjectCacheLoader(request.info) }
         }
         synchronized(project) {
             val versionToCommit = try {
                 // Restoring the latest version in GCS to buffer
-                restoreFileFromStorage(request.fileId, request.info, project)
+                restoreFileFromStorage(request.fileId, request.info)
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return@logging
@@ -549,7 +574,7 @@ class CosmasGoogleCloudService(
             val actualText = request.actualContent.toStringUtf8()
 
             val patch = getDiffPatch(versionToCommit.content.toStringUtf8(), actualText, request.timestamp)
-            project[request.fileId] = versionToCommit.toBuilder().addPatches(patch).build()
+            project.put(request.fileId, versionToCommit.toBuilder().addPatches(patch).build())
 
             // Committing correct version from buffer to GCS
             commitFromMemoryToGCS(request.info, request.fileId, actualText)
@@ -560,39 +585,48 @@ class CosmasGoogleCloudService(
         responseObserver.onCompleted()
     }
 
-    private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo,
-                                       project: ConcurrentMap<String, CosmasProto.FileVersion>): FileVersion {
-        synchronized(project) {
-            // Getting last version from storage or default instance if it doesn't exist
-            val latestVersionBlob: Blob = this.storage.get(getBlobId(fileId, projectInfo))
-                    ?: return FileVersion.getDefaultInstance()
-            val latestVersion = CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
-            LOG.info("Restoring from GCS to buffer file")
-
-            val userName = if (latestVersion.patchesList.isEmpty()) {
-                COSMAS_NAME
-            } else {
-                latestVersion.patchesList.last().userName
+    private fun getLatestVersionBlob(fileId: String, projectInfo: ProjectInfo): Blob? {
+        val prevIds = getPrevIds(projectInfo.projectId)
+        var curFileId = fileId
+        while (true) {
+            val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, projectInfo))
+            if (latestVersionBlob != null) {
+                return latestVersionBlob
             }
-
-            // Preparing new version in memory to replace bad or nonexistent one in buffer
-            // Window should point to the latest N versions
-            val latestVersionInfo = FileVersionInfo.newBuilder()
-                    .setFileId(fileId)
-                    // For in-memory storage implementation resultBlob.generation == null,
-                    // but in this case we don't care about generation value, so I set it to 1L
-                    .setGeneration(latestVersionBlob.generation ?: 1L)
-                    .setUserName(userName)
-                    .setTimestamp(latestVersion.timestamp)
-                    .build()
-            val bufferWindow = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
-
-            // Content should be equal to content of the latest version
-            return FileVersion.newBuilder()
-                    .setContent(latestVersion.content)
-                    .addAllHistoryWindow(bufferWindow)
-                    .build()
+            curFileId = prevIds[curFileId] ?: return null
         }
+    }
+
+    private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo): FileVersion {
+        // Getting last version from storage or default instance if it doesn't exist
+        val latestVersionBlob: Blob = getLatestVersionBlob(fileId, projectInfo)
+                ?: return FileVersion.getDefaultInstance()
+        val latestVersion = CosmasProto.FileVersion.parseFrom(latestVersionBlob.getContent())
+        LOG.info("Restoring from GCS to buffer file")
+
+        val userName = if (latestVersion.patchesList.isEmpty()) {
+            COSMAS_NAME
+        } else {
+            latestVersion.patchesList.last().userName
+        }
+
+        // Preparing new version in memory to replace bad or nonexistent one in buffer
+        // Window should point to the latest N versions
+        val latestVersionInfo = FileVersionInfo.newBuilder()
+                .setFileId(fileId)
+                // For in-memory storage implementation resultBlob.generation == null,
+                // but in this case we don't care about generation value, so I set it to 1L
+                .setGeneration(latestVersionBlob.generation ?: 1L)
+                .setUserName(userName)
+                .setTimestamp(latestVersion.timestamp)
+                .build()
+        val bufferWindow = buildNewWindow(latestVersionInfo, latestVersion.historyWindowList, windowMaxSize)
+
+        // Content should be equal to content of the latest version
+        return FileVersion.newBuilder()
+                .setContent(latestVersion.content)
+                .addAllHistoryWindow(bufferWindow)
+                .build()
     }
 
     override fun restoreDeletedFile(request: CosmasProto.RestoreDeletedFileRequest,
@@ -626,7 +660,12 @@ class CosmasGoogleCloudService(
                     .setOldFileId(request.oldFileId)
                     .setNewFileId(request.newFileId)
                     .build()
-            changeFileId(request.info, listOf(change))
+            try {
+                changeFileId(request.info, listOf(change))
+            } catch (e: StorageException) {
+                handleStorageException(e, responseObserver)
+                return@logging
+            }
         }
         val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
         responseObserver.onNext(response)
@@ -637,10 +676,14 @@ class CosmasGoogleCloudService(
                               responseObserver: StreamObserver<CosmasProto.ChangeFileIdResponse>) = logging(
             "changeFileId", request.info.projectId) {
         LOG.info("""Request:
-          |${request}
+          |$request
         """.trimMargin())
-
-        changeFileId(request.info, request.changesList)
+        try {
+            changeFileId(request.info, request.changesList)
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
 
         val response = CosmasProto.ChangeFileIdResponse.getDefaultInstance()
         responseObserver.onNext(response)
@@ -649,18 +692,27 @@ class CosmasGoogleCloudService(
 
     private fun changeFileId(info: ProjectInfo, changes: List<ChangeId>) {
         val project = synchronized(this.fileBuffer) {
-            this.fileBuffer.getOrPut(info.projectId) { ConcurrentHashMap() }
+            this.fileBuffer.getOrPut(info.projectId) { createProjectCacheLoader(info) }
         }
-        if (project != null) {
-            synchronized(project) {
-                for (change in changes) {
-                    val oldVersion = project[change.oldFileId]
-                            ?: restoreFileFromStorage(change.oldFileId, info, project)
-                    project[change.newFileId] = oldVersion
-                    project.remove(change.oldFileId)
-                }
+        val prevIds = getPrevIds(info.projectId).toMutableMap()
+        synchronized(project) {
+            for (change in changes) {
+                prevIds[change.newFileId] = change.oldFileId
+                val oldVersion = project[change.oldFileId]
+                project.put(change.newFileId, oldVersion)
+                project.invalidate(change.oldFileId)
             }
         }
+
+        this.storage.create(
+                getBlobInfo("${info.projectId}-fileIdChangeMap", info),
+                CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
+    }
+
+    private fun getPrevIds(projectId: String): Map<String, String> {
+        val mapName = "$projectId-fileIdChangeMap"
+        val mapBytes: Blob = this.storage.get(BlobId.of(this.bucketName, mapName)) ?: return mapOf()
+        return CosmasProto.FileIdChangeMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     override fun renameVersion(request: RenameVersionRequest,
