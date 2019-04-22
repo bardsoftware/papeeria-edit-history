@@ -476,26 +476,6 @@ class CosmasGoogleCloudService(
         responseObserver.onCompleted()
     }
 
-    override fun deleteFile(request: CosmasProto.DeleteFileRequest,
-                            responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
-            "deleteFile", request.info.projectId, request.fileId,
-            other = mapOf("fileName" to request.fileName)) {
-        try {
-            val fileToDelete = DeletedFileInfo.newBuilder()
-                    .setFileId(request.fileId)
-                    .setFileName(request.fileName)
-                    .build()
-            deleteFiles(listOf(fileToDelete), request.removalTimestamp, request.info)
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-
-        val response = DeleteFileResponse.newBuilder().build()
-        responseObserver.onNext(response)
-        responseObserver.onCompleted()
-    }
-
     private fun deleteFiles(filesToDelete: List<DeletedFileInfo>, removalTimestamp: Long, info: ProjectInfo) {
         val cemeteryName = "${info.projectId}-cemetery"
 
