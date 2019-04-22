@@ -101,6 +101,7 @@ class CosmasGoogleCloudService(
 
         const val COSMAS_ID = "robot:::cosmas"
         const val COSMAS_NAME = "Version History Service"
+        const val MILLIS_IN_DAY = 24 * 60 * 60 * 1000L
 
         fun buildNewWindow(newInfo: FileVersionInfo, oldWindow: List<FileVersionInfo>,
                            windowMaxSize: Int): MutableList<FileVersionInfo> {
@@ -111,12 +112,12 @@ class CosmasGoogleCloudService(
         }
     }
 
-    private fun getTTL(info: ProjectInfo): Long {
-        val day: Long = 24 * 60 * 60 * 1000
+    private fun getTtlMillis(info: ProjectInfo): Long {
+        val day: Long = MILLIS_IN_DAY
         return if (info.isFreePlan) {
             day
         } else {
-            31 * day
+            30 * day
         }
     }
 
@@ -336,7 +337,7 @@ class CosmasGoogleCloudService(
         }
         val actualVersionList = mutableListOf<FileVersionInfo>()
         val curTime = clock.millis()
-        val ttl = getTTL(request.info)
+        val ttl = getTtlMillis(request.info)
         for (version in versionList) {
             // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
             if (version.timestamp + ttl > curTime) {
@@ -463,37 +464,8 @@ class CosmasGoogleCloudService(
     override fun deleteFiles(request: CosmasProto.DeleteFilesRequest,
                              responseObserver: StreamObserver<CosmasProto.DeleteFilesResponse>) = logging(
             "deleteFiles", request.info.projectId) {
-        val cemeteryName = "${request.info.projectId}-cemetery"
-        val cemeteryBytes: Blob? = try {
-            this.storage.get(getBlobId(cemeteryName, request.info))
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-        val cemetery = if (cemeteryBytes == null) {
-            FileCemetery.newBuilder()
-        } else {
-            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
-        }
-        for (file in request.filesList) {
-            val newTomb = FileTomb.newBuilder()
-                    .setFileId(file.fileId)
-                    .setFileName(file.fileName)
-                    .setRemovalTimestamp(request.removalTimestamp)
-                    .build()
-            cemetery.addCemetery(newTomb)
-            LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
-        }
-
-        val curTime = clock.millis()
-        val ttl = getTTL(request.info)
-        val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it.removalTimestamp + ttl < curTime }
-
         try {
-            this.storage.create(
-                    getBlobInfo(cemeteryName, request.info),
-                    cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
+            deleteFiles(request.filesList, request.removalTimestamp, request.info)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
@@ -508,31 +480,12 @@ class CosmasGoogleCloudService(
                             responseObserver: StreamObserver<CosmasProto.DeleteFileResponse>) = logging(
             "deleteFile", request.info.projectId, request.fileId,
             other = mapOf("fileName" to request.fileName)) {
-        val cemeteryName = "${request.info.projectId}-cemetery"
-        val cemeteryBytes: Blob? = try {
-            this.storage.get(getBlobId(cemeteryName, request.info))
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-        val newTomb = FileTomb.newBuilder()
-                .setFileId(request.fileId)
-                .setFileName(request.fileName)
-                .setRemovalTimestamp(request.removalTimestamp)
-                .build()
-        val cemetery = if (cemeteryBytes == null) {
-            FileCemetery.newBuilder()
-        } else {
-            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
-        }
-        val curTime = clock.millis()
-        val ttl = getTTL(request.info)
-        val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it.removalTimestamp + ttl > curTime }
         try {
-            this.storage.create(
-                    getBlobInfo(cemeteryName, request.info),
-                    cemetery.clearCemetery().addAllCemetery(tombs).addCemetery(newTomb).build().toByteArray())
+            val fileToDelete = DeletedFileInfo.newBuilder()
+                    .setFileId(request.fileId)
+                    .setFileName(request.fileName)
+                    .build()
+            deleteFiles(listOf(fileToDelete), request.removalTimestamp, request.info)
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
@@ -541,6 +494,34 @@ class CosmasGoogleCloudService(
         val response = DeleteFileResponse.newBuilder().build()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
+    }
+
+    private fun deleteFiles(filesToDelete: List<DeletedFileInfo>, removalTimestamp: Long, info: ProjectInfo) {
+        val cemeteryName = "${info.projectId}-cemetery"
+
+        val cemeteryBytes: Blob? = this.storage.get(getBlobId(cemeteryName, info))
+        val cemetery = if (cemeteryBytes == null) {
+            FileCemetery.newBuilder()
+        } else {
+            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
+        }
+        for (file in filesToDelete) {
+            val newTomb = FileTomb.newBuilder()
+                    .setFileId(file.fileId)
+                    .setFileName(file.fileName)
+                    .setRemovalTimestamp(removalTimestamp)
+                    .build()
+            cemetery.addCemetery(newTomb)
+            LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
+        }
+
+        val curTime = clock.millis()
+        val ttl = getTtlMillis(info)
+        val tombs = cemetery.cemeteryList.toMutableList()
+        tombs.removeIf { it.removalTimestamp + ttl < curTime }
+        this.storage.create(
+                getBlobInfo(cemeteryName, info),
+                cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
     }
 
     override fun deletedFileList(request: CosmasProto.DeletedFileListRequest,

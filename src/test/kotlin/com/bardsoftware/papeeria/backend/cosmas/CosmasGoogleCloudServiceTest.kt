@@ -16,6 +16,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_ID
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_NAME
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.MILLIS_IN_DAY
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.buildNewWindow
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
@@ -663,7 +664,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun deleteFileAndClearCemetery() {
-        val day: Long = 24 * 60 * 60 * 1000
+        val day: Long = MILLIS_IN_DAY
         val fakeStorage = mock(Storage::class.java)
         val cemeteryName = "$PROJECT_ID-cemetery"
         val tomb1 = CosmasProto.FileTomb.newBuilder()
@@ -1392,7 +1393,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromMemory() {
-        val day = 24 * 60 * 60 * 1000
+        val day = MILLIS_IN_DAY
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [1, 2, day + 1, day + 2] (second block of thenReturn is for commit)
@@ -1425,7 +1426,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromStorage() {
-        val day: Long = 24 * 60 * 60 * 1000
+        val day: Long = MILLIS_IN_DAY
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
@@ -1456,8 +1457,8 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromStoragePaid() {
-        val day: Long = 24 * 60 * 60 * 1000
-        val month = 31 * day
+        val day: Long = MILLIS_IN_DAY
+        val month = 30 * day
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
