@@ -30,11 +30,20 @@ message FileVersionInfo {
     int64 timestamp = 2;
     string fileId = 3;
     string userName = 4;
+    string versionName = 5;
 }
 
 message FileInfo {
     string projectId = 1;
     string fileId = 2;
+}
+
+message GenerationNameMap {
+    map<int64, string> value = 1;
+}
+
+message FileIdGenerationNameMap {
+    map<string, GenerationNameMap> value = 1;
 }
 
 message FileIdChangeMap {
@@ -185,6 +194,17 @@ message ChangeFileIdRequest {
 message ChangeFileIdResponse {
 }
 
+message RenameVersionRequest {
+    ProjectInfo info = 1;
+    string fileId = 2;
+    int64 generation = 3;
+    string name = 4;
+}
+
+message RenameVersionResponse {
+
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -208,5 +228,7 @@ service Cosmas {
     rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
     }
     rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
+    }
+    rpc RenameVersion (RenameVersionRequest) returns (RenameVersionResponse) {
     }
 }

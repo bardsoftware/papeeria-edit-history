@@ -334,10 +334,17 @@ class CosmasGoogleCloudService(
         } else {
             31 * day
         }
+        val fileIdGenerationNameMap = loadFileIdGenerationNameMap(request.info)
         for (version in versionList) {
             // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
             if (version.timestamp + ttl > curTime) {
-                actualVersionList.add(version)
+                // Setting version name if dictionary contains it, empty string otherwise
+                actualVersionList.add(version.toBuilder()
+                        .setVersionName(fileIdGenerationNameMap.valueMap[version.fileId]
+                                ?.valueMap
+                                ?.get(version.generation)
+                                ?: "")
+                        .build())
             } else {
                 break
             }
@@ -526,7 +533,7 @@ class CosmasGoogleCloudService(
             return@logging
         }
 
-        val response = DeleteFileResponse.newBuilder().build()
+        val response = DeleteFileResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
@@ -720,6 +727,47 @@ class CosmasGoogleCloudService(
         val mapName = "${info.projectId}-fileIdChangeMap"
         val mapBytes: Blob = this.storage.get(getBlobId(mapName, info)) ?: return mapOf()
         return CosmasProto.FileIdChangeMap.parseFrom(mapBytes.getContent()).prevIdsMap
+    }
+
+    override fun renameVersion(request: RenameVersionRequest,
+                               responseObserver: StreamObserver<RenameVersionResponse>) = logging(
+            "renameVersion", request.info.projectId, request.fileId) {
+        val fileIdGenerationNameMapName = "${request.info.projectId}-fileIdGenerationNameMap"
+        val fileIdGenerationNameMap = try {
+            loadFileIdGenerationNameMap(request.info).toBuilder()
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+
+        val generationNameMap  = fileIdGenerationNameMap.valueMap
+                .getOrDefault(request.fileId, GenerationNameMap.getDefaultInstance())
+
+        fileIdGenerationNameMap.putValue(request.fileId, generationNameMap .toBuilder()
+                .putValue(request.generation, request.name)
+                .build())
+        try {
+            this.storage.create(
+                    getBlobInfo(fileIdGenerationNameMapName, request.info),
+                    fileIdGenerationNameMap.build().toByteArray())
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
+        }
+
+        val response = RenameVersionResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+    private fun loadFileIdGenerationNameMap(info: ProjectInfo): FileIdGenerationNameMap {
+        val dictionaryName = "${info.projectId}-fileIdGenerationNameMap"
+        val dictionaryBytes: Blob? = this.storage.get(getBlobId(dictionaryName, info))
+        return if (dictionaryBytes == null) {
+            FileIdGenerationNameMap.getDefaultInstance()
+        } else {
+            FileIdGenerationNameMap.parseFrom(dictionaryBytes.getContent())
+        }
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {
