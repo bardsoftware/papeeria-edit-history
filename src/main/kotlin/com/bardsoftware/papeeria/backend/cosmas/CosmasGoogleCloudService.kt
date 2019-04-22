@@ -93,6 +93,7 @@ class CosmasGoogleCloudService(
                 }
             })
 
+    private val mediator = ServiceFilesMediator(this.storage, this)
 
     companion object {
         fun md5Hash(text: String): String {
@@ -109,6 +110,10 @@ class CosmasGoogleCloudService(
             res.addAll(oldWindow.take(min(windowMaxSize - 1, oldWindow.size)))
             return res
         }
+
+        fun cemeteryName(info: ProjectInfo) = "${info.projectId}-cemetery"
+
+        fun fileIdChangeMapName(info: ProjectInfo) = "${info.projectId}-fileIdChangeMap"
     }
 
     fun hashUserId(userId: String) = md5Hash(userId)
@@ -171,62 +176,62 @@ class CosmasGoogleCloudService(
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
-                val prevIds = getPrevIds(request.info).toMutableMap()
-                for ((fileId, fileVersion) in project.asMap()) {
-                    try {
-                        MDC.clear()
-                        MDC.put("fileId", fileId)
-                        val text = fileVersion.content.toStringUtf8()
-                        val patches = fileVersion.patchesList.toMutableList()
-                        if (patches.isEmpty()) {
+                mediator.withWriteFileIdChangeMap(request.info) {
+                    val prevIds = it.prevIdsMap.toMutableMap()
+                    for ((fileId, fileVersion) in project.asMap()) {
+                        try {
+                            MDC.clear()
+                            MDC.put("fileId", fileId)
+                            val text = fileVersion.content.toStringUtf8()
+                            val patches = fileVersion.patchesList.toMutableList()
+                            if (patches.isEmpty()) {
 
-                            LOG.info("File has no patches, no need to commit it")
-                            continue
-                        }
-                        patches.sortBy { it.timestamp }
+                                LOG.info("File has no patches, no need to commit it")
+                                continue
+                            }
+                            patches.sortBy { it.timestamp }
 
-                        val newText = PatchCorrector.applyPatch(patches, text)
-                        val cosmasHash = md5Hash(newText)
-                        if (patches.last().actualHash == cosmasHash) {
-                            commitFromMemoryToGCS(request.info, fileId, newText)
-                            LOG.info("File has been committed")
-                        } else {
-                            val actualHash = patches.last().actualHash
-                            LOG.error("""Commit failure: hash mismatch.
+                            val newText = PatchCorrector.applyPatch(patches, text)
+                            val cosmasHash = md5Hash(newText)
+                            if (patches.last().actualHash == cosmasHash) {
+                                commitFromMemoryToGCS(request.info, fileId, newText)
+                                LOG.info("File has been committed")
+                            } else {
+                                val actualHash = patches.last().actualHash
+                                LOG.error("""Commit failure: hash mismatch.
                               |Hash after applying patches={}. Last hash supplied by client={}.
                               |This means that the sequence of patches produces something different
                               | than actual file contents.""".trimMargin(),
-                                    cosmasHash, actualHash)
-                            val badFile = CosmasProto.FileInfo.newBuilder()
-                                    .setFileId(fileId)
-                                    .setProjectId(request.info.projectId)
-                                    .build()
-                            response.addBadFiles(badFile)
-                        }
-                        var curFileId = fileId
-                        while (curFileId in prevIds) {
-                            val nextFileId = prevIds[curFileId]
-                            prevIds.remove(curFileId)
-                            curFileId = nextFileId
-                        }
-                    } catch (e: Throwable) {
-                        LOG.error("Error while applying patches", e)
-                        when (e) {
-                            is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                                        cosmasHash, actualHash)
                                 val badFile = CosmasProto.FileInfo.newBuilder()
                                         .setFileId(fileId)
                                         .setProjectId(request.info.projectId)
                                         .build()
                                 response.addBadFiles(badFile)
                             }
-                            else -> throw e
-                        }
+                            var curFileId = fileId
+                            while (curFileId in prevIds) {
+                                val nextFileId = prevIds[curFileId]
+                                prevIds.remove(curFileId)
+                                curFileId = nextFileId
+                            }
+                        } catch (e: Throwable) {
+                            LOG.error("Error while applying patches", e)
+                            when (e) {
+                                is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                                    val badFile = CosmasProto.FileInfo.newBuilder()
+                                            .setFileId(fileId)
+                                            .setProjectId(request.info.projectId)
+                                            .build()
+                                    response.addBadFiles(badFile)
+                                }
+                                else -> throw e
+                            }
 
+                        }
                     }
+                    return@withWriteFileIdChangeMap FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build()
                 }
-                this.storage.create(
-                        getBlobInfo("${request.info.projectId}-fileIdChangeMap", request.info),
-                        CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
             } catch (e: StorageException) {
                 handleStorageException(e, responseObserver)
                 return@logging
@@ -579,16 +584,21 @@ class CosmasGoogleCloudService(
         responseObserver.onCompleted()
     }
 
-    private fun getLatestVersionBlob(fileId: String, projectInfo: ProjectInfo): Blob? {
-        val prevIds = getPrevIds(projectInfo)
-        var curFileId = fileId
-        while (true) {
-            val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, projectInfo))
-            if (latestVersionBlob != null) {
-                return latestVersionBlob
+    private fun getLatestVersionBlob(fileId: String, info: ProjectInfo): Blob? {
+        var resBlob: Blob? = null
+        mediator.withReadFileIdChangeMap(info) {
+            val prevIds = it.prevIdsMap
+            var curFileId = fileId
+            while (true) {
+                val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, info))
+                if (latestVersionBlob != null) {
+                    resBlob = latestVersionBlob
+                    return@withReadFileIdChangeMap
+                }
+                curFileId = prevIds[curFileId] ?: return@withReadFileIdChangeMap
             }
-            curFileId = prevIds[curFileId] ?: return null
         }
+        return resBlob
     }
 
     private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo): FileVersion {
@@ -697,19 +707,18 @@ class CosmasGoogleCloudService(
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getOrPut(info.projectId) { createProjectCacheLoader(info) }
         }
-        val prevIds = getPrevIds(info).toMutableMap()
-        synchronized(project) {
-            for (change in changes) {
-                prevIds[change.newFileId] = change.oldFileId
-                val oldVersion = project[change.oldFileId]
-                project.put(change.newFileId, oldVersion)
-                project.invalidate(change.oldFileId)
+        mediator.withWriteFileIdChangeMap(info) {
+            val prevIds = it.prevIdsMap.toMutableMap()
+            synchronized(project) {
+                for (change in changes) {
+                    prevIds[change.newFileId] = change.oldFileId
+                    val oldVersion = project[change.oldFileId]
+                    project.put(change.newFileId, oldVersion)
+                    project.invalidate(change.oldFileId)
+                }
             }
+            FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build()
         }
-
-        this.storage.create(
-                getBlobInfo("${info.projectId}-fileIdChangeMap", info),
-                CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
     }
 
     private fun getPrevIds(info: ProjectInfo): Map<String, String> {
