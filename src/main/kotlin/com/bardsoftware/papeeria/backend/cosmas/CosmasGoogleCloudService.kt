@@ -726,10 +726,10 @@ class CosmasGoogleCloudService(
             return@logging
         }
 
-        val versionsName = fileIdGenerationNameMap.valueMap
+        val generationNameMap  = fileIdGenerationNameMap.valueMap
                 .getOrDefault(request.fileId, GenerationNameMap.getDefaultInstance())
 
-        fileIdGenerationNameMap.putValue(request.fileId, versionsName.toBuilder()
+        fileIdGenerationNameMap.putValue(request.fileId, generationNameMap .toBuilder()
                 .putValue(request.generation, request.name)
                 .build())
         try {
