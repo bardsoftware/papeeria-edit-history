@@ -308,14 +308,14 @@ class CosmasGoogleCloudService(
         } else {
             31 * day
         }
-        val dictionary = loadDictionary(request.info)
+        val fileIdGenerationNameMap = loadFileIdGenerationNameMap(request.info)
         for (version in versionList) {
             // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
             if (version.timestamp + ttl > curTime) {
                 // Setting version name if dictionary contains it, empty string otherwise
                 actualVersionList.add(version.toBuilder()
-                        .setVersionName(dictionary.filesToVersionsNameMap[version.fileId]
-                                ?.generationToNameMap
+                        .setVersionName(fileIdGenerationNameMap.valueMap[version.fileId]
+                                ?.valueMap
                                 ?.get(version.generation)
                                 ?: "")
                         .build())
@@ -665,25 +665,25 @@ class CosmasGoogleCloudService(
 
     override fun renameVersion(request: RenameVersionRequest,
                                responseObserver: StreamObserver<RenameVersionResponse>) = logging(
-            "restoreDeletedFile", request.info.projectId, request.fileId) {
-        val dictionaryName = "${request.info.projectId}-dictionary"
-        val dictionary = try {
-            loadDictionary(request.info).toBuilder()
+            "renameVersion", request.info.projectId, request.fileId) {
+        val fileIdGenerationNameMapName = "${request.info.projectId}-fileIdGenerationNameMap"
+        val fileIdGenerationNameMap = try {
+            loadFileIdGenerationNameMap(request.info).toBuilder()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
         }
 
-        val versionsName = dictionary.filesToVersionsNameMap
-                .getOrDefault(request.fileId, VersionsName.getDefaultInstance())
+        val versionsName = fileIdGenerationNameMap.valueMap
+                .getOrDefault(request.fileId, GenerationNameMap.getDefaultInstance())
 
-        dictionary.putFilesToVersionsName(request.fileId, versionsName.toBuilder()
-                .putGenerationToName(request.generation, request.name)
+        fileIdGenerationNameMap.putValue(request.fileId, versionsName.toBuilder()
+                .putValue(request.generation, request.name)
                 .build())
         try {
             this.storage.create(
-                    getBlobInfo(dictionaryName, request.info),
-                    dictionary.build().toByteArray())
+                    getBlobInfo(fileIdGenerationNameMapName, request.info),
+                    fileIdGenerationNameMap.build().toByteArray())
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
@@ -694,13 +694,13 @@ class CosmasGoogleCloudService(
         responseObserver.onCompleted()
     }
 
-    private fun loadDictionary(info: ProjectInfo): Dictionary {
-        val dictionaryName = "${info.projectId}-dictionary"
+    private fun loadFileIdGenerationNameMap(info: ProjectInfo): FileIdGenerationNameMap {
+        val dictionaryName = "${info.projectId}-fileIdGenerationNameMap"
         val dictionaryBytes: Blob? = this.storage.get(getBlobId(dictionaryName, info))
         return if (dictionaryBytes == null) {
-            Dictionary.getDefaultInstance()
+            FileIdGenerationNameMap.getDefaultInstance()
         } else {
-            Dictionary.parseFrom(dictionaryBytes.getContent())
+            FileIdGenerationNameMap.parseFrom(dictionaryBytes.getContent())
         }
     }
 

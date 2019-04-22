@@ -38,12 +38,12 @@ message FileInfo {
     string fileId = 2;
 }
 
-message VersionsName {
-    map<int64, string> generationToName = 1;
+message GenerationNameMap {
+    map<int64, string> value = 1;
 }
 
-message Dictionary {
-    map<string, VersionsName> filesToVersionsName = 1;
+message FileIdGenerationNameMap {
+    map<string, GenerationNameMap> value = 1;
 }
 
 message FileTomb {
