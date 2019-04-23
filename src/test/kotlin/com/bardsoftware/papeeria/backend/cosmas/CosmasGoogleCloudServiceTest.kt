@@ -16,6 +16,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_ID
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_NAME
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.MILLIS_IN_DAY
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.buildNewWindow
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
@@ -628,7 +629,7 @@ class CosmasGoogleCloudServiceTest {
         val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
                 .thenReturn(cemeteryBlob)
-        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         val streamRecorder = deleteFile(FILE_ID, "file", time)
         assertNull(streamRecorder.error)
         Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
@@ -648,7 +649,7 @@ class CosmasGoogleCloudServiceTest {
         val cemeteryName = "$PROJECT_ID-cemetery"
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
                 .thenReturn(null)
-        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         val streamRecorder = deleteFile(FILE_ID, "file", time)
         assertNull(streamRecorder.error)
         Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
@@ -662,6 +663,47 @@ class CosmasGoogleCloudServiceTest {
     }
 
     @Test
+    fun deleteFileAndClearCemetery() {
+        val day: Long = MILLIS_IN_DAY
+        val fakeStorage = mock(Storage::class.java)
+        val cemeteryName = "$PROJECT_ID-cemetery"
+        val tomb1 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("1")
+                .setFileName("kek1")
+                .setRemovalTimestamp(day) // should stay in cemetery
+                .build()
+        val tomb2 = CosmasProto.FileTomb.newBuilder()
+                .setFileId("2")
+                .setFileName("kek2")
+                .setRemovalTimestamp(2) // should be removed from cemetery
+                .build()
+        val cemetery = FileCemetery.newBuilder()
+                .addCemetery(tomb1)
+                .addCemetery(tomb2)
+                .build()
+        val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
+        Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
+                .thenReturn(cemeteryBlob)
+
+
+        val clock = mock(Clock::class.java)
+
+        Mockito.`when`(clock.millis()).thenReturn(day + 10)
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, clock)
+        val streamRecorder = deleteFile(FILE_ID, "file", day - 2)
+        assertNull(streamRecorder.error)
+        Mockito.verify(fakeStorage).get(eq(service.getBlobId(cemeteryName, projectInfo())))
+        val newTomb = CosmasProto.FileTomb.newBuilder()
+                .setFileId(FILE_ID)
+                .setFileName("file")
+                .setRemovalTimestamp(day - 2)
+                .build()
+        Mockito.verify(fakeStorage).create(eq(service.getBlobInfo(cemeteryName, projectInfo())),
+                eq(FileCemetery.newBuilder().addCemetery(tomb1).addCemetery(newTomb).build().toByteArray()))
+    }
+
+    @Test
     fun deleteTwoFiles() {
         val fakeStorage = mock(Storage::class.java)
         val time = 1L
@@ -670,7 +712,7 @@ class CosmasGoogleCloudServiceTest {
         val cemeteryBlob = getMockedBlobWithCemetery(cemetery)
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(cemeteryName, projectInfo()))))
                 .thenReturn(cemeteryBlob)
-        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage, getMockedClock())
         val file1 = DeletedFileInfo.newBuilder()
                 .setFileId("1")
                 .setFileName("kek1")
@@ -1352,7 +1394,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromMemory() {
-        val day = 24 * 60 * 60 * 1000
+        val day = MILLIS_IN_DAY
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [1, 2, day + 1, day + 2] (second block of thenReturn is for commit)
@@ -1385,7 +1427,7 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromStorage() {
-        val day: Long = 24 * 60 * 60 * 1000
+        val day: Long = MILLIS_IN_DAY
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
@@ -1416,8 +1458,8 @@ class CosmasGoogleCloudServiceTest {
 
     @Test
     fun versionsNotExistFromStoragePaid() {
-        val day: Long = 24 * 60 * 60 * 1000
-        val month = 31 * day
+        val day: Long = MILLIS_IN_DAY
+        val month = 30 * day
         val clock = mock(Clock::class.java)
 
         // Creating versions with timestamps [0, day, day + 1, day + 2] (second block of thenReturn is for commit)
