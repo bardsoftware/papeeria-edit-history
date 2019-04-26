@@ -41,7 +41,6 @@ import org.mockito.Mockito
 import org.mockito.Mockito.*
 import java.io.IOException
 import java.time.Clock
-import java.time.Month
 
 
 /**
@@ -1897,7 +1896,7 @@ class CosmasGoogleCloudServiceTest {
                 .build()
     }
 
-    fun getMockedClock(): Clock {
+    private fun getMockedClock(): Clock {
         val clock = mock(Clock::class.java)
         Mockito.`when`(clock.millis())
                 .thenReturn(0L)
