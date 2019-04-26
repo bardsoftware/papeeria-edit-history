@@ -47,8 +47,6 @@ class ServiceFilesMediator(private val storage: Storage, private val service: Co
         try {
             val file = getFileFromGCS(info, name, default)
             run(file)
-        } catch (e: StorageException) {
-            throw e
         } finally {
             lock.unlock()
         }
@@ -62,8 +60,6 @@ class ServiceFilesMediator(private val storage: Storage, private val service: Co
             val file = getFileFromGCS(info, name, default)
             val updatedFile = run(file)
             saveFileToGCS(info, name, updatedFile)
-        } catch (e: StorageException) {
-            throw e
         } finally {
             lock.unlock()
         }
