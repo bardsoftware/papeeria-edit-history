@@ -3,6 +3,7 @@ package com.bardsoftware.papeeria.backend.cosmas
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.cemeteryName
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.fileIdChangeMapName
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.fileIdGenerationNameMapName
 import com.google.cloud.storage.Blob
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException
@@ -14,6 +15,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 class ServiceFilesMediator(private val storage: Storage, private val service: CosmasGoogleCloudService) {
 
     private val locks = ConcurrentHashMap<String, ReadWriteLock>()
+
+    fun withReadFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> Unit) {
+        withReadFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+    }
+
+    fun withWriteFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> FileIdGenerationNameMap) {
+        withWriteFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+    }
 
     fun withReadCemetery(info: ProjectInfo, run: (FileCemetery) -> Unit) {
         withReadFile(cemeteryName(info), info, FileCemetery.getDefaultInstance(), run)
@@ -63,7 +72,6 @@ class ServiceFilesMediator(private val storage: Storage, private val service: Co
     private fun <T : GeneratedMessageV3> getFileFromGCS(info: CosmasProto.ProjectInfo,
                                                         name: String, default: T): T {
         val blob: Blob? = this.storage.get(this.service.getBlobId(name, info))
-        default.javaClass
         val content = blob?.getContent() ?: return default
         return default.parserForType.parseFrom(content) as T
     }

@@ -18,6 +18,7 @@ import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Compani
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_NAME
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.MILLIS_IN_DAY
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.buildNewWindow
+import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.fileIdGenerationNameMapName
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
 import com.google.api.gax.paging.Page
@@ -1491,7 +1492,7 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun renameWithNotEmptyFileIdGenerationNameMap() {
         val fakeStorage = mock(Storage::class.java)
-        val dictionaryName = "$PROJECT_ID-fileIdGenerationNameMap"
+        val dictionaryName = fileIdGenerationNameMapName(projectInfo())
         val dictionaryBefore = FileIdGenerationNameMap.newBuilder()
                 .putValue("2", GenerationNameMap.newBuilder()
                         .putValue(1L, "SuperVersionButOtherFile")
@@ -1518,7 +1519,7 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun getVersionsListWithName() {
         val fakeStorage = mock(Storage::class.java)
-        val dictionaryName = "$PROJECT_ID-fileIdGenerationNameMap"
+        val dictionaryName = fileIdGenerationNameMapName(projectInfo())
         val dictionary = FileIdGenerationNameMap.newBuilder()
                 .putValue(FILE_ID, GenerationNameMap.newBuilder()
                         .putValue(1L, "SuperVersionButOtherFile")
@@ -1530,13 +1531,13 @@ class CosmasGoogleCloudServiceTest {
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
         addManyVersions(1, 10, fakeStorage = fakeStorage)
         val versions = getFullVersionsList()
-        assertEquals(versions[0].versionName, "SuperVersionButOtherFile")
+        assertEquals("SuperVersionButOtherFile", versions[0].versionName)
     }
 
     @Test
     fun renameWithNotEmptyFileIdGenerationNameMapManyVersions() {
         val fakeStorage = mock(Storage::class.java)
-        val dictionaryName = "$PROJECT_ID-fileIdGenerationNameMap"
+        val dictionaryName = fileIdGenerationNameMapName(projectInfo())
         val dictionaryBefore = FileIdGenerationNameMap.newBuilder()
                 .putValue(FILE_ID, GenerationNameMap.newBuilder()
                         .putValue(2L, "SuperVersionAnotherGeneration")
@@ -1563,7 +1564,7 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun renameWithEmptyFileIdGenerationNameMap() {
         val fakeStorage = mock(Storage::class.java)
-        val dictionaryName = "$PROJECT_ID-fileIdGenerationNameMap"
+        val dictionaryName = fileIdGenerationNameMapName(projectInfo())
         val emptyFileIdGenerationNameMapBlob = getMockedBlobWithFileIdGenerationNameMap(FileIdGenerationNameMap.getDefaultInstance())
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
                 .thenReturn(emptyFileIdGenerationNameMapBlob)
@@ -1582,7 +1583,7 @@ class CosmasGoogleCloudServiceTest {
     @Test
     fun renameWithNullFileIdGenerationNameMap() {
         val fakeStorage = mock(Storage::class.java)
-        val dictionaryName = "$PROJECT_ID-fileIdGenerationNameMap"
+        val dictionaryName = fileIdGenerationNameMapName(projectInfo())
         Mockito.`when`(fakeStorage.get(eq(service.getBlobId(dictionaryName, projectInfo()))))
                 .thenReturn(null)
         this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
