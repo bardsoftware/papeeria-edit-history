@@ -30,11 +30,20 @@ message FileVersionInfo {
     int64 timestamp = 2;
     string fileId = 3;
     string userName = 4;
+    string versionName = 5;
 }
 
 message FileInfo {
     string projectId = 1;
     string fileId = 2;
+}
+
+message GenerationNameMap {
+    map<int64, string> value = 1;
+}
+
+message FileIdGenerationNameMap {
+    map<string, GenerationNameMap> value = 1;
 }
 
 message FileIdChangeMap {
@@ -136,19 +145,6 @@ message DeletedFileInfo {
 message DeleteFilesResponse {
 }
 
-message DeleteFileRequest {
-    option deprecated = true;
-    ProjectInfo info = 1;
-    string fileId = 2;
-    string fileName = 3;
-    int64 removalTimestamp = 4;
-}
-
-
-message DeleteFileResponse {
-    option deprecated = true;
-}
-
 message DeletedFileListRequest {
     ProjectInfo info = 1;
 }
@@ -162,6 +158,7 @@ message ForcedFileCommitRequest {
     string fileId = 2;
     int64 timestamp = 3;
     bytes actualContent = 4;
+    string userName = 5;
 }
 
 message ForcedFileCommitResponse {
@@ -184,6 +181,17 @@ message ChangeFileIdRequest {
 message ChangeFileIdResponse {
 }
 
+message RenameVersionRequest {
+    ProjectInfo info = 1;
+    string fileId = 2;
+    int64 generation = 3;
+    string name = 4;
+}
+
+message RenameVersionResponse {
+
+}
+
 service Cosmas {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {
     }
@@ -197,9 +205,6 @@ service Cosmas {
     }
     rpc DeleteFiles (DeleteFilesRequest) returns (DeleteFilesResponse) {
     }
-    rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) {
-        option deprecated = true;
-    }
     rpc DeletedFileList (DeletedFileListRequest) returns (DeletedFileListResponse) {
     }
     rpc ForcedFileCommit (ForcedFileCommitRequest) returns (ForcedFileCommitResponse) {
@@ -207,5 +212,7 @@ service Cosmas {
     rpc RestoreDeletedFile (RestoreDeletedFileRequest) returns (RestoreDeletedFileResponse) {
     }
     rpc ChangeFileId (ChangeFileIdRequest) returns (ChangeFileIdResponse) {
+    }
+    rpc RenameVersion (RenameVersionRequest) returns (RenameVersionResponse) {
     }
 }
