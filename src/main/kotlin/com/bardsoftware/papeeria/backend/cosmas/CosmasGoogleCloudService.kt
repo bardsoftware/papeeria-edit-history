@@ -85,14 +85,6 @@ class CosmasGoogleCloudService(
     private val fileBuffer =
             ConcurrentHashMap<String, LoadingCache<String, FileVersion>>()
 
-
-    private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
-            object : CacheLoader<String, FileVersion>() {
-                override fun load(fileId: String): FileVersion {
-                    return restoreFileFromStorage(fileId, info)
-                }
-            })
-
     private val mediator = ServiceFilesMediator(this.storage, this)
 
     companion object {
@@ -119,6 +111,13 @@ class CosmasGoogleCloudService(
         fun fileIdGenerationNameMapName(info: ProjectInfo) = "${info.projectId}-fileIdGenerationNameMap"
     }
 
+    private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
+            object : CacheLoader<String, FileVersion>() {
+                override fun load(fileId: String): FileVersion {
+                    return restoreFileFromStorage(fileId, info)
+                }
+            })
+
     private fun getTtlMillis(info: ProjectInfo): Long {
         val day: Long = MILLIS_IN_DAY
         return if (info.isFreePlan) {
@@ -128,7 +127,7 @@ class CosmasGoogleCloudService(
         }
     }
 
-    fun hashUserId(userId: String) = md5Hash(userId)
+    private fun hashUserId(userId: String) = md5Hash(userId)
 
     fun fileStorageName(fileId: String, info: ProjectInfo): String = hashUserId(info.ownerId) + "/" + fileId
 
@@ -188,8 +187,8 @@ class CosmasGoogleCloudService(
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
-                mediator.withWriteFileIdChangeMap(request.info) {
-                    val prevIds = it.prevIdsMap.toMutableMap()
+                mediator.withWriteFileIdChangeMap(request.info) { fileIdChangeMap ->
+                    val prevIds = fileIdChangeMap.prevIdsMap.toMutableMap()
                     for ((fileId, fileVersion) in project.asMap()) {
                         try {
                             MDC.clear()
@@ -208,6 +207,12 @@ class CosmasGoogleCloudService(
                             if (patches.last().actualHash == cosmasHash) {
                                 commitFromMemoryToGCS(request.info, fileId, ByteString.copyFromUtf8(newText), null)
                                 LOG.info("File has been committed")
+                                var curFileId = fileId
+                                while (curFileId in prevIds) {
+                                    val nextFileId = prevIds[curFileId]
+                                    prevIds.remove(curFileId)
+                                    curFileId = nextFileId
+                                }
                             } else {
                                 val actualHash = patches.last().actualHash
                                 LOG.error("""Commit failure: hash mismatch.
@@ -220,12 +225,6 @@ class CosmasGoogleCloudService(
                                         .setProjectId(request.info.projectId)
                                         .build()
                                 response.addBadFiles(badFile)
-                            }
-                            var curFileId = fileId
-                            while (curFileId in prevIds) {
-                                val nextFileId = prevIds[curFileId]
-                                prevIds.remove(curFileId)
-                                curFileId = nextFileId
                             }
                         } catch (e: Throwable) {
                             LOG.error("Error while applying patches", e)
@@ -319,7 +318,6 @@ class CosmasGoogleCloudService(
             return@logging
         }
         response.file = CosmasProto.FileVersion.parseFrom(blob.getContent())
-        println("File size=${response.file.content.size()}")
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
@@ -641,12 +639,13 @@ class CosmasGoogleCloudService(
                         .build()
                 changeFileId(request.info, listOf(change))
             }
-            val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
-            responseObserver.onNext(response)
-            responseObserver.onCompleted()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
+            return@logging
         }
+        val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
     }
 
     override fun changeFileId(request: CosmasProto.ChangeFileIdRequest,
@@ -698,15 +697,15 @@ class CosmasGoogleCloudService(
                 fileIdGenerationNameMapBuilder.putValue(request.fileId, generationNameMap.toBuilder()
                         .putValue(request.generation, request.name)
                         .build())
-                fileIdGenerationNameMapBuilder.build()
                 return@withWriteFileIdGenerationNameMap fileIdGenerationNameMapBuilder.build()
             }
-            val response = RenameVersionResponse.getDefaultInstance()
-            responseObserver.onNext(response)
-            responseObserver.onCompleted()
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
+            return@logging
         }
+        val response = RenameVersionResponse.getDefaultInstance()
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {
