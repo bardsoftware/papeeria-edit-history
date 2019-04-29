@@ -1,5 +1,5 @@
 /**
-Copyright 2018 BarD Software s.r.o
+Copyright 2019 BarD Software s.r.o
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -181,14 +181,14 @@ class ServiceFilesMediatorTest {
                 .build()
     }
 
-    private fun getMockedBlob(fileContent: String): Blob {
+    private fun getMockedBlob(fileContent: String, generation: Long = 1L): Blob {
         val blob = Mockito.mock(Blob::class.java)
         Mockito.`when`(blob.getContent()).thenReturn(
                 CosmasProto.FileVersion.newBuilder().setContent(
                         ByteString.copyFrom(fileContent.toByteArray()))
                         .build().toByteArray())
         Mockito.`when`(blob.generation)
-                .thenReturn(1L)
+                .thenReturn(generation)
         return blob
     }
 

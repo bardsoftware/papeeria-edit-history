@@ -248,9 +248,11 @@ class CosmasGoogleCloudService(
                 if (e.code != 412) {
                     handleStorageException(e, responseObserver)
                     return@logging
+                } else {
+                    // If e.code == 412, than somebody changed fileIdChangeMap while we were working with it,
+                    // so we can't push our changes, but it's not a fatal error, cause we can clean it in later commits.
+                    LOG.error("Somebody changed fileIdChangeMap while we were working with it", e)
                 }
-                // If e.code == 412, than somebody changed fileIdChangeMap while we were working with it,
-                // so we can't push our changes, but it's not a fatal error, cause we can clean it in later commits.
             }
 
         }

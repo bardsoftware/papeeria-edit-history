@@ -107,6 +107,24 @@ class CosmasGoogleCloudServiceTest {
         commit()
     }
 
+    @Test
+    fun concurrent412ErrorInCommit() {
+        val blob = getMockedBlob("lol", 1L)
+        val fakeStorage: Storage = mock(Storage::class.java)
+        Mockito.`when`(fakeStorage.create(
+                any(BlobInfo::class.java), any(ByteArray::class.java)))
+                .thenReturn(blob)
+                .thenReturn(null)
+
+        this.service = CosmasGoogleCloudService(this.BUCKET_NAME, fakeStorage)
+        val patch = diffPatch(USER_ID, "", "lol", 1L)
+        addPatchToService(patch)
+        Mockito.`when`(fakeStorage.create(eq(service.getBlobInfo(fileIdChangeMapName(projectInfo()), projectInfo(), 0L)),
+                any(ByteArray::class.java), eq(Storage.BlobTargetOption.generationMatch())))
+                .thenThrow(StorageException(412, "whatever"))
+        commit()
+    }
+
 
     @Test
     fun addPatch() {
