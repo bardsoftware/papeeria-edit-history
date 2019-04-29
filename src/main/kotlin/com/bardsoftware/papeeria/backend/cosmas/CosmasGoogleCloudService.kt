@@ -103,12 +103,6 @@ class CosmasGoogleCloudService(
             res.addAll(oldWindow.take(min(windowMaxSize - 1, oldWindow.size)))
             return res
         }
-
-        fun cemeteryName(info: ProjectInfo) = "${info.projectId}-cemetery"
-
-        fun fileIdChangeMapName(info: ProjectInfo) = "${info.projectId}-fileIdChangeMap"
-
-        fun fileIdGenerationNameMapName(info: ProjectInfo) = "${info.projectId}-fileIdGenerationNameMap"
     }
 
     private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
@@ -135,8 +129,8 @@ class CosmasGoogleCloudService(
         return BlobId.of(bucketName, fileStorageName(fileId, info), generation)
     }
 
-    fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
-        return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
+    fun getBlobInfo(fileId: String, info: ProjectInfo, generation: Long? = null): BlobInfo {
+        return BlobInfo.newBuilder(getBlobId(fileId, info, generation)).build()
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
@@ -207,6 +201,13 @@ class CosmasGoogleCloudService(
                             if (patches.last().actualHash == cosmasHash) {
                                 commitFromMemoryToGCS(request.info, fileId, ByteString.copyFromUtf8(newText), null)
                                 LOG.info("File has been committed")
+                                // We keep a history of file id changes in fileIdChangeMap.
+                                // We need it only until the first write of FileVersion to persistent storage,
+                                // because we want all history of the file, but we don't know it's previous ids.
+                                // After commit we don't need file id change mapping, because we can get previous id
+                                // from the FileVersionInfo records in FileVersion.
+                                // fileId -> fileIdPrev -> fileIdPrevPrev -> ...
+                                // We wrote FileVersion with id = fileId, so we can remove this chain from prevIds map
                                 var curFileId = fileId
                                 while (curFileId in prevIds) {
                                     val nextFileId = prevIds[curFileId]
@@ -626,12 +627,16 @@ class CosmasGoogleCloudService(
             "restoreDeletedFile", request.info.projectId, request.oldFileId,
             other = mapOf("newFileId" to request.newFileId)) {
         try {
+            // Removing from cemetery record about this file
             mediator.withWriteCemetery(request.info) { cemetery ->
                 val cemeteryBuilder = cemetery.toBuilder()
                 val tombs = cemeteryBuilder.cemeteryList.toMutableList()
                 tombs.removeIf { it.fileId == request.oldFileId }
                 return@withWriteCemetery cemeteryBuilder.clearCemetery().addAllCemetery(tombs).build()
             }
+            // In Papeeria backend restored file has new id,
+            // so we add to map, that prevId(newFileId) = oldFileId,
+            // so we maintain file history before it was deleted
             if (request.newFileId.isNotEmpty()) {
                 val change = ChangeId.newBuilder()
                         .setOldFileId(request.oldFileId)

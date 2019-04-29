@@ -18,11 +18,11 @@ import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Compani
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.COSMAS_NAME
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.MILLIS_IN_DAY
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.buildNewWindow
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.cemeteryName
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.fileIdChangeMapName
-import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.fileIdGenerationNameMapName
 import com.bardsoftware.papeeria.backend.cosmas.CosmasGoogleCloudService.Companion.md5Hash
 import com.bardsoftware.papeeria.backend.cosmas.CosmasProto.*
+import com.bardsoftware.papeeria.backend.cosmas.ServiceFilesMediator.Companion.cemeteryName
+import com.bardsoftware.papeeria.backend.cosmas.ServiceFilesMediator.Companion.fileIdChangeMapName
+import com.bardsoftware.papeeria.backend.cosmas.ServiceFilesMediator.Companion.fileIdGenerationNameMapName
 import com.google.api.gax.paging.Page
 import com.google.cloud.storage.*
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper

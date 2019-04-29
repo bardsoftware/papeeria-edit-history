@@ -114,7 +114,8 @@ class ServiceFilesMediatorTest {
                     .setContent(ByteString.copyFrom(expectedContent.toByteArray())).build(), it)
             return@withWriteFile writtenVersion
         }
-        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo()), writtenVersion.toByteArray())
+        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 1L),
+                writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
     }
 
 
@@ -151,7 +152,8 @@ class ServiceFilesMediatorTest {
             assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
             return@withWriteFile writtenVersion
         }
-        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo()), writtenVersion.toByteArray())
+        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 0L),
+                writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
     }
 
 
@@ -186,7 +188,7 @@ class ServiceFilesMediatorTest {
                         ByteString.copyFrom(fileContent.toByteArray()))
                         .build().toByteArray())
         Mockito.`when`(blob.generation)
-                .thenReturn(0L)
+                .thenReturn(1L)
         return blob
     }
 
