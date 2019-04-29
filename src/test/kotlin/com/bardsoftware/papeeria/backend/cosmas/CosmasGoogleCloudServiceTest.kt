@@ -1639,11 +1639,11 @@ class CosmasGoogleCloudServiceTest {
                 .setInfo(info)
                 .build()
         return Pair(getVersionRecorder, getVersionRequest)
-    }
+    }   
 
 
     private fun getServiceForTests(): CosmasGoogleCloudService {
-        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.getOptions().service, getMockedClock())
+        return CosmasGoogleCloudService(this.BUCKET_NAME, LocalStorageHelper.customOptions(false).service, getMockedClock())
     }
 
     private fun getStreamRecorderAndRequestForVersionList(fileId: String = FILE_ID, info: ProjectInfo = projectInfo(),

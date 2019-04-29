@@ -87,7 +87,8 @@ class ServiceFilesMediator(private val storage: Storage, private val service: Co
         // If file doesn't exists in GCS, it thinks that it has generation = 0
         // when it checks, that generation that you get is equal to current generation in storage
         val content = blob?.getContent() ?: return Pair(default, 0L)
-        return Pair(default.parserForType.parseFrom(content) as T, blob.generation)
+        return Pair(default.parserForType.parseFrom(content) as T,
+                blob.generation)
     }
 
     private fun <T : GeneratedMessageV3> saveFileToGCS(info: CosmasProto.ProjectInfo,
