@@ -245,8 +245,12 @@ class CosmasGoogleCloudService(
                     return@withWriteFileIdChangeMap FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build()
                 }
             } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return@logging
+                if (e.code != 412) {
+                    handleStorageException(e, responseObserver)
+                    return@logging
+                }
+                // If e.code == 412, than somebody changed fileIdChangeMap while we were working with it,
+                // so we can't push our changes, but it's not a fatal error, cause we can clean it in later commits.
             }
 
         }
@@ -486,6 +490,8 @@ class CosmasGoogleCloudService(
         try {
             deleteFiles(request.filesList, request.removalTimestamp, request.info)
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed cemetery) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
@@ -645,6 +651,11 @@ class CosmasGoogleCloudService(
                 changeFileId(request.info, listOf(change))
             }
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed some file), there a 2 possible cases:
+            // 1) It happened with cemetery. We must retry for sure, so we send error message to Papeeria
+            // 2) It happened with fileIdChangeMap. We want to try to change fileIdChangeMap again,
+            //    so we will ask Papeeria to retry. Nothing wrong can happen with cemetery, cause we are removing
+            //    tomb onlu if cemetery contains it, so after fake cemetery change we will fix fileIdChangeMap.
             handleStorageException(e, responseObserver)
             return@logging
         }
@@ -662,6 +673,8 @@ class CosmasGoogleCloudService(
         try {
             changeFileId(request.info, request.changesList)
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed fileIdChangeMap) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
@@ -705,6 +718,8 @@ class CosmasGoogleCloudService(
                 return@withWriteFileIdGenerationNameMap fileIdGenerationNameMapBuilder.build()
             }
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed versionName map) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
