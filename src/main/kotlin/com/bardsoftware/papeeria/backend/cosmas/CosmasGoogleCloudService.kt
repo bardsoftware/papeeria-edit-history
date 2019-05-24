@@ -85,14 +85,7 @@ class CosmasGoogleCloudService(
     private val fileBuffer =
             ConcurrentHashMap<String, LoadingCache<String, FileVersion>>()
 
-
-    private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
-            object : CacheLoader<String, FileVersion>() {
-                override fun load(fileId: String): FileVersion {
-                    return restoreFileFromStorage(fileId, info)
-                }
-            })
-
+    private val mediator = ServiceFilesMediator(this.storage, this)
 
     companion object {
         fun md5Hash(text: String): String {
@@ -112,6 +105,13 @@ class CosmasGoogleCloudService(
         }
     }
 
+    private fun createProjectCacheLoader(info: ProjectInfo) = CacheBuilder.newBuilder().build(
+            object : CacheLoader<String, FileVersion>() {
+                override fun load(fileId: String): FileVersion {
+                    return restoreFileFromStorage(fileId, info)
+                }
+            })
+
     private fun getTtlMillis(info: ProjectInfo): Long {
         val day: Long = MILLIS_IN_DAY
         return if (info.isFreePlan) {
@@ -121,7 +121,7 @@ class CosmasGoogleCloudService(
         }
     }
 
-    fun hashUserId(userId: String) = md5Hash(userId)
+    private fun hashUserId(userId: String) = md5Hash(userId)
 
     fun fileStorageName(fileId: String, info: ProjectInfo): String = hashUserId(info.ownerId) + "/" + fileId
 
@@ -129,8 +129,8 @@ class CosmasGoogleCloudService(
         return BlobId.of(bucketName, fileStorageName(fileId, info), generation)
     }
 
-    fun getBlobInfo(fileId: String, info: ProjectInfo): BlobInfo {
-        return BlobInfo.newBuilder(getBlobId(fileId, info)).build()
+    fun getBlobInfo(fileId: String, info: ProjectInfo, generation: Long? = null): BlobInfo {
+        return BlobInfo.newBuilder(getBlobId(fileId, info, generation)).build()
     }
 
     override fun createPatch(request: CosmasProto.CreatePatchRequest,
@@ -181,65 +181,78 @@ class CosmasGoogleCloudService(
         val response = CosmasProto.CommitVersionResponse.newBuilder()
         synchronized(project) {
             try {
-                val prevIds = getPrevIds(request.info).toMutableMap()
-                for ((fileId, fileVersion) in project.asMap()) {
-                    try {
-                        MDC.clear()
-                        MDC.put("fileId", fileId)
-                        val text = fileVersion.content.toStringUtf8()
-                        val patches = fileVersion.patchesList.toMutableList()
-                        if (patches.isEmpty()) {
+                mediator.withWriteFileIdChangeMap(request.info) { fileIdChangeMap ->
+                    val prevIds = fileIdChangeMap.prevIdsMap.toMutableMap()
+                    for ((fileId, fileVersion) in project.asMap()) {
+                        try {
+                            MDC.clear()
+                            MDC.put("fileId", fileId)
+                            val text = fileVersion.content.toStringUtf8()
+                            val patches = fileVersion.patchesList.toMutableList()
+                            if (patches.isEmpty()) {
 
-                            LOG.info("File has no patches, no need to commit it")
-                            continue
-                        }
-                        patches.sortBy { it.timestamp }
+                                LOG.info("File has no patches, no need to commit it")
+                                continue
+                            }
+                            patches.sortBy { it.timestamp }
 
-                        val newText = PatchCorrector.applyPatch(patches, text)
-                        val cosmasHash = md5Hash(newText)
-                        if (patches.last().actualHash == cosmasHash) {
-                            commitFromMemoryToGCS(request.info, fileId, ByteString.copyFromUtf8(newText), null)
-                            LOG.info("File has been committed")
-                        } else {
-                            val actualHash = patches.last().actualHash
-                            LOG.error("""Commit failure: hash mismatch.
+                            val newText = PatchCorrector.applyPatch(patches, text)
+                            val cosmasHash = md5Hash(newText)
+                            if (patches.last().actualHash == cosmasHash) {
+                                commitFromMemoryToGCS(request.info, fileId, ByteString.copyFromUtf8(newText), null)
+                                LOG.info("File has been committed")
+                                // We keep a history of file id changes in fileIdChangeMap.
+                                // We need it only until the first write of FileVersion to persistent storage,
+                                // because we want all history of the file, but we don't know it's previous ids.
+                                // After commit we don't need file id change mapping, because we can get previous id
+                                // from the FileVersionInfo records in FileVersion.
+                                // fileId -> fileIdPrev -> fileIdPrevPrev -> ...
+                                // We wrote FileVersion with id = fileId, so we can remove this chain from prevIds map
+                                var curFileId = fileId
+                                while (curFileId in prevIds) {
+                                    val nextFileId = prevIds[curFileId]
+                                    prevIds.remove(curFileId)
+                                    curFileId = nextFileId
+                                }
+                            } else {
+                                val actualHash = patches.last().actualHash
+                                LOG.error("""Commit failure: hash mismatch.
                               |Hash after applying patches={}. Last hash supplied by client={}.
                               |This means that the sequence of patches produces something different
                               | than actual file contents.""".trimMargin(),
-                                    cosmasHash, actualHash)
-                            val badFile = CosmasProto.FileInfo.newBuilder()
-                                    .setFileId(fileId)
-                                    .setProjectId(request.info.projectId)
-                                    .build()
-                            response.addBadFiles(badFile)
-                        }
-                        var curFileId = fileId
-                        while (curFileId in prevIds) {
-                            val nextFileId = prevIds[curFileId]
-                            prevIds.remove(curFileId)
-                            curFileId = nextFileId
-                        }
-                    } catch (e: Throwable) {
-                        LOG.error("Error while applying patches", e)
-                        when (e) {
-                            is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                                        cosmasHash, actualHash)
                                 val badFile = CosmasProto.FileInfo.newBuilder()
                                         .setFileId(fileId)
                                         .setProjectId(request.info.projectId)
                                         .build()
                                 response.addBadFiles(badFile)
                             }
-                            else -> throw e
-                        }
+                        } catch (e: Throwable) {
+                            LOG.error("Error while applying patches", e)
+                            when (e) {
+                                is PatchCorrector.ApplyPatchException, is IllegalArgumentException -> {
+                                    val badFile = CosmasProto.FileInfo.newBuilder()
+                                            .setFileId(fileId)
+                                            .setProjectId(request.info.projectId)
+                                            .build()
+                                    response.addBadFiles(badFile)
+                                }
+                                else -> throw e
+                            }
 
+                        }
                     }
+                    return@withWriteFileIdChangeMap FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build()
                 }
-                this.storage.create(
-                        getBlobInfo("${request.info.projectId}-fileIdChangeMap", request.info),
-                        CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
             } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return@logging
+                if (e.code != 412) {
+                    handleStorageException(e, responseObserver)
+                    return@logging
+                } else {
+                    // If e.code == 412, than somebody changed fileIdChangeMap while we were working with it,
+                    // so we can't push our changes, but it's not a fatal error, cause we can clean it in later commits.
+                    LOG.error("Somebody changed fileIdChangeMap while we were working with it", e)
+                }
             }
 
         }
@@ -312,7 +325,6 @@ class CosmasGoogleCloudService(
             return@logging
         }
         response.file = CosmasProto.FileVersion.parseFrom(blob.getContent())
-        println("File size=${response.file.content.size()}")
         responseObserver.onNext(response.build())
         responseObserver.onCompleted()
     }
@@ -339,20 +351,26 @@ class CosmasGoogleCloudService(
         val actualVersionList = mutableListOf<FileVersionInfo>()
         val curTime = clock.millis()
         val ttl = getTtlMillis(request.info)
-        val fileIdGenerationNameMap = loadFileIdGenerationNameMap(request.info)
-        for (version in versionList) {
-            // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
-            if (version.timestamp + ttl > curTime) {
-                // Setting version name if dictionary contains it, empty string otherwise
-                actualVersionList.add(version.toBuilder()
-                        .setVersionName(fileIdGenerationNameMap.valueMap[version.fileId]
-                                ?.valueMap
-                                ?.get(version.generation)
-                                ?: "")
-                        .build())
-            } else {
-                break
+        try {
+            mediator.withReadFileIdGenerationNameMap(request.info) { fileIdGenerationNameMap ->
+                for (version in versionList) {
+                    // Checking that version could been deleted by GCS after 31 days(Delta plan) or 1 day(Epsilon plan)
+                    if (version.timestamp + ttl > curTime) {
+                        // Setting version name if dictionary contains it, empty string otherwise
+                        actualVersionList.add(version.toBuilder()
+                                .setVersionName(fileIdGenerationNameMap.valueMap[version.fileId]
+                                        ?.valueMap
+                                        ?.get(version.generation)
+                                        ?: "")
+                                .build())
+                    } else {
+                        break
+                    }
+                }
             }
+        } catch (e: StorageException) {
+            handleStorageException(e, responseObserver)
+            return@logging
         }
         response.addAllVersions(actualVersionList)
         responseObserver.onNext(response.build())
@@ -377,7 +395,6 @@ class CosmasGoogleCloudService(
 
     private fun getFileVersionListFromStorage(projectInfo: ProjectInfo, fileId: String,
                                               startGeneration: Long): List<FileVersionInfo> {
-
         val blob: Blob? = this.storage.get(getBlobId(fileId, projectInfo, startGeneration)) // throws StorageException
         return if (blob != null) {
             CosmasProto.FileVersion.parseFrom(blob.getContent()).historyWindowList
@@ -475,6 +492,8 @@ class CosmasGoogleCloudService(
         try {
             deleteFiles(request.filesList, request.removalTimestamp, request.info)
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed cemetery) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
@@ -485,52 +504,41 @@ class CosmasGoogleCloudService(
     }
 
     private fun deleteFiles(filesToDelete: List<DeletedFileInfo>, removalTimestamp: Long, info: ProjectInfo) {
-        val cemeteryName = "${info.projectId}-cemetery"
+        mediator.withWriteCemetery(info) { cemetery ->
+            val cemeteryBuilder = cemetery.toBuilder()
+            for (file in filesToDelete) {
+                val newTomb = FileTomb.newBuilder()
+                        .setFileId(file.fileId)
+                        .setFileName(file.fileName)
+                        .setRemovalTimestamp(removalTimestamp)
+                        .build()
+                cemeteryBuilder.addCemetery(newTomb)
+                LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
+            }
 
-        val cemeteryBytes: Blob? = this.storage.get(getBlobId(cemeteryName, info))
-        val cemetery = if (cemeteryBytes == null) {
-            FileCemetery.newBuilder()
-        } else {
-            FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
-        }
-        for (file in filesToDelete) {
-            val newTomb = FileTomb.newBuilder()
-                    .setFileId(file.fileId)
-                    .setFileName(file.fileName)
-                    .setRemovalTimestamp(removalTimestamp)
-                    .build()
-            cemetery.addCemetery(newTomb)
-            LOG.info("File={} with name={} has been added to cemetery", file.fileId, file.fileName)
-        }
+            val curTime = clock.millis()
+            val ttl = getTtlMillis(info)
+            val tombs = cemeteryBuilder.cemeteryList.toMutableList()
+            tombs.removeIf { it.removalTimestamp + ttl < curTime }
 
-        val curTime = clock.millis()
-        val ttl = getTtlMillis(info)
-        val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it.removalTimestamp + ttl < curTime }
-        this.storage.create(
-                getBlobInfo(cemeteryName, info),
-                cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
+            return@withWriteCemetery cemeteryBuilder.clearCemetery().addAllCemetery(tombs).build()
+        }
     }
 
     override fun deletedFileList(request: CosmasProto.DeletedFileListRequest,
                                  responseObserver: StreamObserver<CosmasProto.DeletedFileListResponse>) = logging(
             "deletedFileList", request.info.projectId) {
-        val cemeteryName = "${request.info.projectId}-cemetery"
-        val cemeteryBytes: Blob? = try {
-            this.storage.get(getBlobId(cemeteryName, request.info))
+        try {
+            mediator.withReadCemetery(request.info) { cemetery ->
+                val response = CosmasProto.DeletedFileListResponse.newBuilder()
+                response.addAllFiles(cemetery.cemeteryList)
+                responseObserver.onNext(response.build())
+                responseObserver.onCompleted()
+            }
         } catch (e: StorageException) {
             handleStorageException(e, responseObserver)
             return@logging
         }
-        val cemetery = if (cemeteryBytes == null) {
-            CosmasProto.FileCemetery.newBuilder()
-        } else {
-            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
-        }
-        val response = CosmasProto.DeletedFileListResponse.newBuilder()
-        response.addAllFiles(cemetery.cemeteryList)
-        responseObserver.onNext(response.build())
-        responseObserver.onCompleted()
     }
 
     override fun forcedFileCommit(request: CosmasProto.ForcedFileCommitRequest,
@@ -564,16 +572,21 @@ class CosmasGoogleCloudService(
         responseObserver.onCompleted()
     }
 
-    private fun getLatestVersionBlob(fileId: String, projectInfo: ProjectInfo): Blob? {
-        val prevIds = getPrevIds(projectInfo)
-        var curFileId = fileId
-        while (true) {
-            val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, projectInfo))
-            if (latestVersionBlob != null) {
-                return latestVersionBlob
+    private fun getLatestVersionBlob(fileId: String, info: ProjectInfo): Blob? {
+        var resBlob: Blob? = null
+        mediator.withReadFileIdChangeMap(info) {
+            val prevIds = it.prevIdsMap
+            var curFileId = fileId
+            while (true) {
+                val latestVersionBlob: Blob? = this.storage.get(getBlobId(curFileId, info))
+                if (latestVersionBlob != null) {
+                    resBlob = latestVersionBlob
+                    return@withReadFileIdChangeMap
+                }
+                curFileId = prevIds[curFileId] ?: return@withReadFileIdChangeMap
             }
-            curFileId = prevIds[curFileId] ?: return null
         }
+        return resBlob
     }
 
     private fun restoreFileFromStorage(fileId: String, projectInfo: ProjectInfo): FileVersion {
@@ -621,39 +634,32 @@ class CosmasGoogleCloudService(
                                     responseObserver: StreamObserver<CosmasProto.RestoreDeletedFileResponse>) = logging(
             "restoreDeletedFile", request.info.projectId, request.oldFileId,
             other = mapOf("newFileId" to request.newFileId)) {
-        val cemeteryName = "${request.info.projectId}-cemetery"
-        val cemeteryBytes: Blob? = try {
-            this.storage.get(getBlobId(cemeteryName, request.info))
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-        val cemetery = if (cemeteryBytes == null) {
-            CosmasProto.FileCemetery.newBuilder()
-        } else {
-            CosmasProto.FileCemetery.parseFrom(cemeteryBytes.getContent()).toBuilder()
-        }
-        val tombs = cemetery.cemeteryList.toMutableList()
-        tombs.removeIf { it.fileId == request.oldFileId }
         try {
-            this.storage.create(
-                    getBlobInfo(cemeteryName, request.info),
-                    cemetery.clearCemetery().addAllCemetery(tombs).build().toByteArray())
+            // Removing from cemetery record about this file
+            mediator.withWriteCemetery(request.info) { cemetery ->
+                val cemeteryBuilder = cemetery.toBuilder()
+                val tombs = cemeteryBuilder.cemeteryList.toMutableList()
+                tombs.removeIf { it.fileId == request.oldFileId }
+                return@withWriteCemetery cemeteryBuilder.clearCemetery().addAllCemetery(tombs).build()
+            }
+            // In Papeeria backend restored file has new id,
+            // so we add to map, that prevId(newFileId) = oldFileId,
+            // so we maintain file history before it was deleted
+            if (request.newFileId.isNotEmpty()) {
+                val change = ChangeId.newBuilder()
+                        .setOldFileId(request.oldFileId)
+                        .setNewFileId(request.newFileId)
+                        .build()
+                changeFileId(request.info, listOf(change))
+            }
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed some file), there a 2 possible cases:
+            // 1) It happened with cemetery. We must retry for sure, so we send error message to Papeeria
+            // 2) It happened with fileIdChangeMap. We want to try to change fileIdChangeMap again,
+            //    so we will ask Papeeria to retry. Nothing wrong can happen with cemetery, cause we are removing
+            //    tomb onlu if cemetery contains it, so after fake cemetery change we will fix fileIdChangeMap.
             handleStorageException(e, responseObserver)
             return@logging
-        }
-        if (request.newFileId.isNotEmpty()) {
-            val change = ChangeId.newBuilder()
-                    .setOldFileId(request.oldFileId)
-                    .setNewFileId(request.newFileId)
-                    .build()
-            try {
-                changeFileId(request.info, listOf(change))
-            } catch (e: StorageException) {
-                handleStorageException(e, responseObserver)
-                return@logging
-            }
         }
         val response = CosmasProto.RestoreDeletedFileResponse.getDefaultInstance()
         responseObserver.onNext(response)
@@ -669,6 +675,8 @@ class CosmasGoogleCloudService(
         try {
             changeFileId(request.info, request.changesList)
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed fileIdChangeMap) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
@@ -682,66 +690,44 @@ class CosmasGoogleCloudService(
         val project = synchronized(this.fileBuffer) {
             this.fileBuffer.getOrPut(info.projectId) { createProjectCacheLoader(info) }
         }
-        val prevIds = getPrevIds(info).toMutableMap()
-        synchronized(project) {
-            for (change in changes) {
-                prevIds[change.newFileId] = change.oldFileId
-                val oldVersion = project[change.oldFileId]
-                project.put(change.newFileId, oldVersion)
-                project.invalidate(change.oldFileId)
+        mediator.withWriteFileIdChangeMap(info) {
+            val prevIds = it.prevIdsMap.toMutableMap()
+            synchronized(project) {
+                for (change in changes) {
+                    prevIds[change.newFileId] = change.oldFileId
+                    val oldVersion = project[change.oldFileId]
+                    project.put(change.newFileId, oldVersion)
+                    project.invalidate(change.oldFileId)
+                }
             }
+            return@withWriteFileIdChangeMap FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build()
         }
-
-        this.storage.create(
-                getBlobInfo("${info.projectId}-fileIdChangeMap", info),
-                CosmasProto.FileIdChangeMap.newBuilder().putAllPrevIds(prevIds).build().toByteArray())
-    }
-
-    private fun getPrevIds(info: ProjectInfo): Map<String, String> {
-        val mapName = "${info.projectId}-fileIdChangeMap"
-        val mapBytes: Blob = this.storage.get(getBlobId(mapName, info)) ?: return mapOf()
-        return CosmasProto.FileIdChangeMap.parseFrom(mapBytes.getContent()).prevIdsMap
     }
 
     override fun renameVersion(request: RenameVersionRequest,
                                responseObserver: StreamObserver<RenameVersionResponse>) = logging(
             "renameVersion", request.info.projectId, request.fileId) {
-        val fileIdGenerationNameMapName = "${request.info.projectId}-fileIdGenerationNameMap"
-        val fileIdGenerationNameMap = try {
-            loadFileIdGenerationNameMap(request.info).toBuilder()
-        } catch (e: StorageException) {
-            handleStorageException(e, responseObserver)
-            return@logging
-        }
-
-        val generationNameMap  = fileIdGenerationNameMap.valueMap
-                .getOrDefault(request.fileId, GenerationNameMap.getDefaultInstance())
-
-        fileIdGenerationNameMap.putValue(request.fileId, generationNameMap .toBuilder()
-                .putValue(request.generation, request.name)
-                .build())
         try {
-            this.storage.create(
-                    getBlobInfo(fileIdGenerationNameMapName, request.info),
-                    fileIdGenerationNameMap.build().toByteArray())
+            mediator.withWriteFileIdGenerationNameMap(request.info) { fileIdGenerationNameMap ->
+                val fileIdGenerationNameMapBuilder = fileIdGenerationNameMap.toBuilder()
+
+                val generationNameMap = fileIdGenerationNameMapBuilder.valueMap
+                        .getOrDefault(request.fileId, GenerationNameMap.getDefaultInstance())
+
+                fileIdGenerationNameMapBuilder.putValue(request.fileId, generationNameMap.toBuilder()
+                        .putValue(request.generation, request.name)
+                        .build())
+                return@withWriteFileIdGenerationNameMap fileIdGenerationNameMapBuilder.build()
+            }
         } catch (e: StorageException) {
+            // If e.code == 412 (somebody changed versionName map) we want to send error message too,
+            // cause we want Papeeria to repeat request
             handleStorageException(e, responseObserver)
             return@logging
         }
-
         val response = RenameVersionResponse.getDefaultInstance()
         responseObserver.onNext(response)
         responseObserver.onCompleted()
-    }
-
-    private fun loadFileIdGenerationNameMap(info: ProjectInfo): FileIdGenerationNameMap {
-        val dictionaryName = "${info.projectId}-fileIdGenerationNameMap"
-        val dictionaryBytes: Blob? = this.storage.get(getBlobId(dictionaryName, info))
-        return if (dictionaryBytes == null) {
-            FileIdGenerationNameMap.getDefaultInstance()
-        } else {
-            FileIdGenerationNameMap.parseFrom(dictionaryBytes.getContent())
-        }
     }
 
     private fun getDiffPatch(oldText: String, newText: String, timestamp: Long): CosmasProto.Patch {
