@@ -1,33 +1,29 @@
 [![Build Status](https://travis-ci.org/bardsoftware/papeeria-edit-history.svg?branch=master)](https://travis-ci.org/bardsoftware/papeeria-edit-history)
 
-## Running Cosmas server
-You need a JSON credentials file to be able to access Google Cloud Storage and you need to know GCS bucket name.
-
-```
-$ gradle installDist
-$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/credentials/file.json
-$ papeeria-edit-history/build/install/Cosmas/bin/cosmas-server --bucket "papeeria-interns-cosmas"
-
-$ docker run -it --rm -v $(pwd):/workspace -v ivy-cache:/root/.ivy2 -v activator-cache:/opt/activator/repository -w /workspace --link 
-postgres:postgres --link memcached:memcache -p 9000:9000 --add-host="cosmas:$(../aws/usr/bin/get_internal_ip)" 
-bardsoftware/papeeria-builder activator
-$ run -Dconfig.file=conf/cosmas.conf
-```
-
 ## Summary
 
-This is an experimental component of Papeeria which is responsible for storing file edit history. Its main functions are as follows:
+This is a component of Papeeria which is responsible for storing file edit history. Its main functions are as follows:
 
 * Keep N latest revisions of every stored text file 
 * Record changes made by users in the process of file editing
 * Replay the sequence of edits starting from some particular revision with an option to reject some of the edits
-* Provide "suggestion mode" which allows for one editor to edit his own copy of file with the purpose of mergind the changes into the master copy afterwards.
+* Provide "suggestion mode" which allows for one editor to edit his own copy of file with the purpose of merging the changes into the master copy afterwards.
 
 This project was started in March 2018 as a term practice work of the students of Saint-Petersburg Academic University.
 
 ## Code name
 
 This project is internally called _Cosmas_ in the honor of [Cosmas of Prague](https://en.wikipedia.org/wiki/Cosmas_of_Prague), one of the Slavic chronicle writers. This name also has connotations with [Kozma Prutkov](https://ru.wikipedia.org/wiki/%D0%9A%D0%BE%D0%B7%D1%8C%D0%BC%D0%B0_%D0%9F%D1%80%D1%83%D1%82%D0%BA%D0%BE%D0%B2)
+
+## Running Cosmas server locally
+You need JDK 8+ and Gradle 5+. If you're not using gcloud tools, you'll need a JSON credentials file to be able to access Google Cloud Storage and you need to know GCS bucket name. Create your own Google Cloud project and GCS bucket if you're not in Papeeria team.
+
+The following will start Cosmas server on default port 9805 in insecure mode with data stored in `papeeria-eu-dev-cosmas` bucket.
+
+```
+$ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/credentials/file.json
+$ gradle run --args='--bucket papeeria-eu-dev-cosmas'
+```
 
 ## Policy of making changes
 
