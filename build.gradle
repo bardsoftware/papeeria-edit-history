@@ -37,23 +37,23 @@ configurations {
 }
 
 dependencies {
-    libprotoImplementation 'com.google.protobuf:protobuf-java:3.+'
-    libprotoImplementation 'io.grpc:grpc-protobuf:1.19.+'
-    libprotoImplementation 'io.grpc:grpc-stub:1.+'
+    libprotoImplementation 'com.google.protobuf:protobuf-java:latest.release'
+    libprotoImplementation 'io.grpc:grpc-protobuf:latest.release'
+    libprotoImplementation 'io.grpc:grpc-stub:latest.release'
 
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    compile "io.grpc:grpc-netty:1.+"
-    compile "io.grpc:grpc-testing:1.+"
-    compile "com.xenomachina:kotlin-argparser:2.0.+"
-    compile 'com.google.cloud:google-cloud-storage:1.23.+'
-    compile 'com.google.cloud:google-cloud-datastore:1.23.+'
-    compile 'com.google.cloud:google-cloud-nio:0.42.+'
-    compile 'com.google.guava:guava:27.1-jre'
-    compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.+'
-    compile group: 'ch.qos.logback', name: 'logback-core', version: '1.3.+'
+    compile "io.grpc:grpc-netty:latest.release"
+    compile "io.grpc:grpc-testing:latest.release"
+    compile "com.xenomachina:kotlin-argparser:latest.release"
+    compile 'com.google.cloud:google-cloud-storage:latest.release'
+    compile 'com.google.cloud:google-cloud-datastore:latest.release'
+    compile 'com.google.cloud:google-cloud-nio:latest.release'
+    compile 'com.google.guava:guava:latest.release'
+    compile 'ch.qos.logback:logback-classic:latest.release'
+    compile 'ch.qos.logback:logback-core:latest.release'
     compile group: 'io.netty', name: 'netty-tcnative-boringssl-static', version: '2.0.+'
     compile configurations.libprotoImplementation
-    
+
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile group: 'org.mockito', name: 'mockito-all', version: '1.8.+'
 }
