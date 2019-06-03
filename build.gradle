@@ -1,9 +1,15 @@
+import java.text.SimpleDateFormat
+
 buildscript {
     ext.kotlin_version = '1.3.+'
 
     repositories {
         mavenCentral()
         jcenter()
+        maven {
+            name "papeeria-maven"
+            url "gcs://papeeria-maven-repo/maven2"
+        }
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -12,39 +18,30 @@ buildscript {
 }
 
 plugins {
-    id 'com.google.cloud.tools.jib' version '1.0.0'
+    id "org.jetbrains.kotlin.jvm"
+    id 'com.google.cloud.tools.jib'
 }
 
-apply plugin: 'kotlin'
-apply plugin: 'com.google.protobuf'
-apply plugin: 'idea'
+apply plugin: 'java'
 apply plugin: 'application'
-
-
-group 'com.bardsoftware.papeeria.backend.cosmas'
-version '1.0-SNAPSHOT'
-
-sourceSets {
-    main {
-        java {
-            srcDirs 'src/main/java', 'generated/source/proto/main/java',
-                    'generated/source/proto/main/grpc'
-        }
-    }
-}
-
-sourceCompatibility = 1.8
+apply plugin: 'com.google.protobuf'
+apply plugin: 'maven-publish'
 
 repositories {
     mavenCentral()
     jcenter()
 }
 
+configurations {
+    libprotoImplementation
+}
+
 dependencies {
+    libprotoImplementation 'com.google.protobuf:protobuf-java:3.+'
+    libprotoImplementation 'io.grpc:grpc-protobuf:1.19.+'
+
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    compile 'com.google.protobuf:protobuf-java:3.+'
     compile 'io.grpc:grpc-stub:1.+'
-    compile 'io.grpc:grpc-protobuf:1.+'
     compile "io.grpc:grpc-netty:1.+"
     compile "io.grpc:grpc-testing:1.+"
     compile "com.xenomachina:kotlin-argparser:2.0.+"
@@ -55,14 +52,36 @@ dependencies {
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.3.+'
     compile group: 'ch.qos.logback', name: 'logback-core', version: '1.3.+'
     compile group: 'io.netty', name: 'netty-tcnative-boringssl-static', version: '2.0.+'
+    compile configurations.libprotoImplementation
+
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile group: 'org.mockito', name: 'mockito-all', version: '1.8.+'
-
 }
+
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+sourceSets {
+    main {
+        proto {
+        }
+        java {
+        }
+    }
+    libproto {
+        java {
+            srcDirs "$projectDir/src/generated/main/java"
+        }
+    }
+}
+
+sourceCompatibility = 1.8
 
 protobuf {
     protoc {
         artifact = 'com.google.protobuf:protoc:3.+'
+        generatedFilesBaseDir = "$projectDir/src/generated"
     }
     plugins {
         grpc {
@@ -76,49 +95,21 @@ protobuf {
     }
 }
 
+task libproto(type: Jar) {
+    dependsOn = ["compileLibprotoJava"]
+    from sourceSets.libproto.output.classesDirs
+    include "com/bardsoftware/**"
+    archiveName = "cosmas-proto-${version}.jar"
+}
+
 mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasServerKt'
 
-startScripts.enabled = false
-
-task cosmasServer(type: CreateStartScripts) {
-    mainClassName = 'com.bardsoftware.papeeria.backend.cosmas.CosmasServerKt'
-    applicationName = 'cosmas-server'
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
-}
-
-applicationDistribution.into('bin') {
-    from(cosmasServer)
-    fileMode = 0755
-}
-
 test {
+    useJUnitPlatform()
     testLogging {
+        exceptionFormat = 'full'
         showStandardStreams = true
     }
-}
-
-task genProdKeys(type: Exec) {
-    commandLine "openssl", "req",
-        "-x509",
-        "-newkey", "rsa:4096",
-        "-keyout", "prod_cosmas_key.pem",
-        "-out", "prod_cosmas_cert.pem",
-        "-days", "3650",
-        "-nodes",
-        "-subj",
-        "/C=CZ/ST=/L=Prague/O=BarD Software s.r.o/CN=cosmas.prod.papeeria.com"
-}
-task genDevKeys(type: Exec) {
-    commandLine "openssl", "req",
-            "-x509",
-            "-newkey", "rsa:4096",
-            "-keyout", "dev_cosmas_key.pem",
-            "-out", "dev_cosmas_cert.pem",
-            "-days", "3650",
-            "-nodes",
-            "-subj",
-            "/C=CZ/ST=/L=Prague/O=BarD Software s.r.o/CN=cosmas.dev.papeeria.com"
 }
 
 jib {
@@ -128,7 +119,27 @@ jib {
     extraDirectory {
         permissions = [
                 '/var/log/cosmas': '777',
-                '/var/log/cosmas/cosmas.log': '666' 
+                '/var/log/cosmas/cosmas.log': '666'
         ]
+    }
+}
+
+group 'com.bardsoftware.papeeria.backend'
+version new SimpleDateFormat("yyyy.MM.dd").format(new Date())
+
+publishing {
+    repositories {
+        maven {
+            name "papeeria-maven"
+            url "gcs://papeeria-maven-repo/maven2"
+        }
+
+    }
+    publications {
+        mavenCosmasProto(MavenPublication) {
+            artifactId = 'cosmas-proto'
+            artifact libproto
+            version project.version
+        }
     }
 }
