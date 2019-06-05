@@ -18,13 +18,13 @@ import com.google.cloud.storage.Blob
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper
+import com.google.common.base.Ticker
 import com.google.protobuf.ByteString
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito
 import java.io.IOException
-import java.time.Clock
 
 /**
  * Some tests for ServiceFilesMediator
@@ -192,10 +192,5 @@ class ServiceFilesMediatorTest {
         return blob
     }
 
-    private fun getMockedClock(): Clock {
-        val clock = Mockito.mock(Clock::class.java)
-        Mockito.`when`(clock.millis())
-                .thenReturn(0L)
-        return clock
-    }
+    private fun getMockedClock(): Ticker = ManualTicker()
 }
