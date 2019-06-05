@@ -1463,7 +1463,7 @@ class CosmasGoogleCloudServiceTest {
     private inner class VersionTestSetup(private val timestampSequence: List<Long>,
                                          userName: String = "",
                                          maxWindowSize: Int = 5) {
-        val fakeStorage = mock(Storage::class.java)
+        val fakeStorage: Storage = mock(Storage::class.java)
         val ticker = SequenceTicker()
         val service = CosmasGoogleCloudService(
             bucketName = BUCKET_NAME,
@@ -1697,9 +1697,9 @@ class CosmasGoogleCloudServiceTest {
         return CosmasGoogleCloudService(BUCKET_NAME, LocalStorageHelper.customOptions(false).service, getMockedClock())
     }
 
-    private fun getStreamRecorderAndRequestForVersionList(fileId: String = FILE_ID, info: ProjectInfo = projectInfo(),
-                                                          startGeneration: Long):
-            Pair<StreamRecorder<FileVersionListResponse>, FileVersionListRequest> {
+    private fun getStreamRecorderAndRequestForVersionList(
+        fileId: String = FILE_ID, info: ProjectInfo = projectInfo(), startGeneration: Long
+    ): Pair<StreamRecorder<FileVersionListResponse>, FileVersionListRequest> {
         val listVersionsRecorder: StreamRecorder<FileVersionListResponse> = StreamRecorder.create()
         val listVersionsRequest = FileVersionListRequest
                 .newBuilder()
@@ -1711,7 +1711,8 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getVersionsList(fileId: String = FILE_ID, projectId: String = PROJECT_ID,
-                                startGeneration: Long = -1L, isFreePlan: Boolean = true, cosmas: CosmasGoogleCloudService = this.service): List<Long> {
+                                startGeneration: Long = -1L, isFreePlan: Boolean = true,
+                                cosmas: CosmasGoogleCloudService = this.service): List<Long> {
         val (listVersionsRecorder, listVersionsRequest) =
                 getStreamRecorderAndRequestForVersionList(fileId,
                         projectInfo(projectId = projectId, isFreePlan = isFreePlan), startGeneration)
@@ -1720,7 +1721,8 @@ class CosmasGoogleCloudServiceTest {
     }
 
     private fun getFullVersionsList(fileId: String = FILE_ID, projectId: String = PROJECT_ID,
-                                    startGeneration: Long = -1L, isFreePlan: Boolean = true, cosmas: CosmasGoogleCloudService = this.service): List<FileVersionInfo> {
+                                    startGeneration: Long = -1L, isFreePlan: Boolean = true,
+                                    cosmas: CosmasGoogleCloudService = this.service): List<FileVersionInfo> {
         val (listVersionsRecorder, listVersionsRequest) =
                 getStreamRecorderAndRequestForVersionList(fileId,
                         projectInfo(projectId = projectId, isFreePlan = isFreePlan), startGeneration)
@@ -1971,8 +1973,8 @@ class CosmasGoogleCloudServiceTest {
         this.service.forcedFileCommit(request, recorder)
     }
 
-    fun projectInfo(projectId: String = PROJECT_ID, ownerId: String = USER_ID,
-                    isFreePlan: Boolean = true): ProjectInfo {
+    private fun projectInfo(projectId: String = PROJECT_ID, ownerId: String = USER_ID,
+                            isFreePlan: Boolean = true): ProjectInfo {
         return ProjectInfo.newBuilder()
                 .setProjectId(projectId)
                 .setOwnerId(ownerId)
