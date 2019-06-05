@@ -43,6 +43,10 @@ dependencies {
 
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     compile "io.grpc:grpc-netty:latest.release"
+    compile "io.prometheus:simpleclient_common:latest.release"
+    compile "io.prometheus:simpleclient:latest.release"
+    compile "io.prometheus:simpleclient_hotspot:latest.release"
+    compile "io.prometheus:simpleclient_httpserver:latest.release"
     compile "com.xenomachina:kotlin-argparser:latest.release"
     compile 'com.google.cloud:google-cloud-storage:latest.release'
     compile 'com.google.cloud:google-cloud-datastore:latest.release'
@@ -68,6 +72,7 @@ sourceSets {
         proto {
         }
         java {
+            srcDirs "$projectDir/src/generated/main/java", "$projectDir/src/generated/main/grpc"
         }
     }
     libproto {

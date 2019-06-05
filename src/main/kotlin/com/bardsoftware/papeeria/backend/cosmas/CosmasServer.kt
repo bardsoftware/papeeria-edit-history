@@ -27,6 +27,8 @@ import java.io.File
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
+
+
 private val LOG = LoggerFactory.getLogger("CosmasServer")
 
 /**
@@ -104,8 +106,10 @@ fun main(args: Array<String>) = mainBody {
                         CosmasGoogleCloudService(bucket))
             }
 
-    LOG.info("Listening on port ${arg.port}")
     server.start()
+    exportMetricz(arg.metriczPort)
+    LOG.info("Listening on port ${arg.port}. Exposing metricz on port ${arg.metriczPort}")
+
     server.blockUntilShutDown()
 }
 
@@ -118,4 +122,6 @@ class CosmasServerArgs(parser: ArgParser) {
             help = "path to SSL key").default { null }
     val bucket: String? by parser.storing("--bucket",
             help = "GCS bucket where version history will be stored").default { null }
+    val metriczPort: Int by parser.storing("--metricz-port",
+        help = "HTTP port for exposing metricz (default 9700)") { toInt() }.default { 9700 }
 }
