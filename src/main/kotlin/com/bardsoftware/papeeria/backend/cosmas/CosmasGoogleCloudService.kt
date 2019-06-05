@@ -78,7 +78,7 @@ class CosmasGoogleCloudService(
                     .build()
             )
         }.build().service,
-    private val ticker: Ticker = Ticker.systemTicker(),
+    private val ticker: Ticker = WALL_TIME_TICKER,
     private val windowMaxSize: Int = 10,
     private val cacheBuilderSpec: String = "expireAfterAccess=5m") : CosmasGrpc.CosmasImplBase() {
 
@@ -766,4 +766,10 @@ class CosmasGoogleCloudService(
     }
 
     private fun currentTimeMillis(): Long = ticker.read() / 1000000 // Ticker returns time in nanoseconds
+}
+
+private object WALL_TIME_TICKER: Ticker() {
+    override fun read(): Long {
+        return System.currentTimeMillis() * 1000000L // 1m nanos in 1ms
+    }
 }
