@@ -30,81 +30,81 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
  */
 class ServiceFilesMediator(private val storage: Storage, private val service: CosmasGoogleCloudService) {
 
-    private val locks = ConcurrentHashMap<String, ReadWriteLock>()
+  private val locks = ConcurrentHashMap<String, ReadWriteLock>()
 
-    fun withReadFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> Unit) {
-        withReadFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+  fun withReadFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> Unit) {
+    withReadFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+  }
+
+  fun withWriteFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> FileIdGenerationNameMap) {
+    withWriteFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+  }
+
+  fun withReadCemetery(info: ProjectInfo, run: (FileCemetery) -> Unit) {
+    withReadFile(cemeteryName(info), info, FileCemetery.getDefaultInstance(), run)
+  }
+
+  fun withWriteCemetery(info: ProjectInfo, run: (FileCemetery) -> FileCemetery) {
+    withWriteFile(cemeteryName(info), info, FileCemetery.getDefaultInstance(), run)
+  }
+
+  fun withReadFileIdChangeMap(info: ProjectInfo, run: (FileIdChangeMap) -> Unit) {
+    withReadFile(fileIdChangeMapName(info), info, FileIdChangeMap.getDefaultInstance(), run)
+  }
+
+  fun withWriteFileIdChangeMap(info: ProjectInfo, run: (FileIdChangeMap) -> FileIdChangeMap) {
+    withWriteFile(fileIdChangeMapName(info), info, FileIdChangeMap.getDefaultInstance(), run)
+  }
+
+  fun <T : GeneratedMessageV3> withReadFile(name: String, info: ProjectInfo,
+                                            default: T, run: (T) -> Unit) {
+    val lock = locks.getOrPut(name) { ReentrantReadWriteLock() }.readLock()
+    lock.lock()
+    try {
+      val (file, _) = getFileFromGCS(info, name, default)
+      run(file)
+    } finally {
+      lock.unlock()
     }
+  }
 
-    fun withWriteFileIdGenerationNameMap(info: ProjectInfo, run: (FileIdGenerationNameMap) -> FileIdGenerationNameMap) {
-        withWriteFile(fileIdGenerationNameMapName(info), info, FileIdGenerationNameMap.getDefaultInstance(), run)
+  fun <T : GeneratedMessageV3> withWriteFile(name: String, info: CosmasProto.ProjectInfo,
+                                             default: T, run: (T) -> T) {
+    val lock = locks.getOrPut(name) { ReentrantReadWriteLock() }.writeLock()
+    lock.lock()
+    try {
+      val (file, generation) = getFileFromGCS(info, name, default)
+      val updatedFile = run(file)
+      saveFileToGCS(info, name, updatedFile, generation)
+    } finally {
+      lock.unlock()
     }
+  }
 
-    fun withReadCemetery(info: ProjectInfo, run: (FileCemetery) -> Unit) {
-        withReadFile(cemeteryName(info), info, FileCemetery.getDefaultInstance(), run)
-    }
+  private fun <T : GeneratedMessageV3> getFileFromGCS(info: CosmasProto.ProjectInfo,
+                                                      name: String, default: T): Pair<T, Long> {
+    val blob: Blob? = this.storage.get(this.service.getBlobId(name, info))
+    // If file doesn't exists in GCS, it thinks that it has generation = 0
+    // when it checks, that generation that you get is equal to current generation in storage
+    val content = blob?.getContent() ?: return Pair(default, 0L)
+    return Pair(default.parserForType.parseFrom(content) as T,
+        blob.generation)
+  }
 
-    fun withWriteCemetery(info: ProjectInfo, run: (FileCemetery) -> FileCemetery) {
-        withWriteFile(cemeteryName(info), info, FileCemetery.getDefaultInstance(), run)
-    }
+  private fun <T : GeneratedMessageV3> saveFileToGCS(info: CosmasProto.ProjectInfo,
+                                                     name: String, file: T,
+      // file generation before we loaded it to GCS
+                                                     prevGeneration: Long) {
+    this.storage.create(this.service.getBlobInfo(name, info, prevGeneration), file.toByteArray(),
+        // If in GCS file generation changed, we can't replace it content
+        Storage.BlobTargetOption.generationMatch())
+  }
 
-    fun withReadFileIdChangeMap(info: ProjectInfo, run: (FileIdChangeMap) -> Unit) {
-        withReadFile(fileIdChangeMapName(info), info, FileIdChangeMap.getDefaultInstance(), run)
-    }
+  companion object {
+    fun cemeteryName(info: ProjectInfo) = "${info.projectId}-cemetery"
 
-    fun withWriteFileIdChangeMap(info: ProjectInfo, run: (FileIdChangeMap) -> FileIdChangeMap) {
-        withWriteFile(fileIdChangeMapName(info), info, FileIdChangeMap.getDefaultInstance(), run)
-    }
+    fun fileIdChangeMapName(info: ProjectInfo) = "${info.projectId}-fileIdChangeMap"
 
-    fun <T : GeneratedMessageV3> withReadFile(name: String, info: ProjectInfo,
-                                              default: T, run: (T) -> Unit) {
-        val lock = locks.getOrPut(name) { ReentrantReadWriteLock() }.readLock()
-        lock.lock()
-        try {
-            val (file, _) = getFileFromGCS(info, name, default)
-            run(file)
-        } finally {
-            lock.unlock()
-        }
-    }
-
-    fun <T : GeneratedMessageV3> withWriteFile(name: String, info: CosmasProto.ProjectInfo,
-                                               default: T, run: (T) -> T) {
-        val lock = locks.getOrPut(name) { ReentrantReadWriteLock() }.writeLock()
-        lock.lock()
-        try {
-            val (file, generation) = getFileFromGCS(info, name, default)
-            val updatedFile = run(file)
-            saveFileToGCS(info, name, updatedFile, generation)
-        } finally {
-            lock.unlock()
-        }
-    }
-
-    private fun <T : GeneratedMessageV3> getFileFromGCS(info: CosmasProto.ProjectInfo,
-                                                        name: String, default: T): Pair<T, Long> {
-        val blob: Blob? = this.storage.get(this.service.getBlobId(name, info))
-        // If file doesn't exists in GCS, it thinks that it has generation = 0
-        // when it checks, that generation that you get is equal to current generation in storage
-        val content = blob?.getContent() ?: return Pair(default, 0L)
-        return Pair(default.parserForType.parseFrom(content) as T,
-                blob.generation)
-    }
-
-    private fun <T : GeneratedMessageV3> saveFileToGCS(info: CosmasProto.ProjectInfo,
-                                                       name: String, file: T,
-                                                       // file generation before we loaded it to GCS
-                                                       prevGeneration: Long) {
-        this.storage.create(this.service.getBlobInfo(name, info, prevGeneration), file.toByteArray(),
-                // If in GCS file generation changed, we can't replace it content
-                Storage.BlobTargetOption.generationMatch())
-    }
-
-    companion object {
-        fun cemeteryName(info: ProjectInfo) = "${info.projectId}-cemetery"
-
-        fun fileIdChangeMapName(info: ProjectInfo) = "${info.projectId}-fileIdChangeMap"
-
-        fun fileIdGenerationNameMapName(info: ProjectInfo) = "${info.projectId}-fileIdGenerationNameMap"
-    }
+    fun fileIdGenerationNameMapName(info: ProjectInfo) = "${info.projectId}-fileIdGenerationNameMap"
+  }
 }

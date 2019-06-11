@@ -32,165 +32,164 @@ import java.io.IOException
  * @author Aleksandr Fedotov (iisuslik43)
  */
 class ServiceFilesMediatorTest {
-    private val BUCKET_NAME = "papeeria-interns-cosmas"
-    private var service = getServiceForTests()
-    private var mediator = getMediatorForTests()
+  private val BUCKET_NAME = "papeeria-interns-cosmas"
+  private var service = getServiceForTests()
+  private var mediator = getMediatorForTests()
 
-    @Before
-    fun testInitialization() {
-        mediator = getMediatorForTests()
-        println()
+  @Before
+  fun testInitialization() {
+    mediator = getMediatorForTests()
+    println()
+  }
+
+  @Test
+  fun readFileWorksNotExists() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(null)
+    mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
     }
+  }
 
-    @Test
-    fun readFileWorksNotExists() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(null)
-        mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
-        }
+  @Test
+  fun readFileWorksFileExists() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    val expectedContent = "file content"
+    mediator = getMediatorWithMocked(fakeStorage)
+    val blob = getMockedBlob(expectedContent)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(blob)
+    mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      assertEquals(CosmasProto.FileVersion.newBuilder()
+          .setContent(ByteString.copyFrom(expectedContent.toByteArray())).build(), it)
     }
+  }
 
-    @Test
-    fun readFileWorksFileExists() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        val expectedContent = "file content"
-        mediator = getMediatorWithMocked(fakeStorage)
-        val blob = getMockedBlob(expectedContent)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(blob)
-        mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            assertEquals(CosmasProto.FileVersion.newBuilder()
-                    .setContent(ByteString.copyFrom(expectedContent.toByteArray())).build(), it)
-        }
+
+  @Test(expected = StorageException::class)
+  fun readFileExceptionThrows() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(null)
+
+    mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      throw StorageException(IOException())
     }
+  }
 
-
-    @Test(expected = StorageException::class)
-    fun readFileExceptionThrows() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(null)
-
-        mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            throw StorageException(IOException())
-        }
+  @Test
+  fun readFileExceptionUnlock() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(null)
+    try {
+      mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+        throw StorageException(IOException())
+      }
+    } catch (e: StorageException) {
+      // should be there
     }
-
-    @Test
-    fun readFileExceptionUnlock() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(null)
-        try {
-            mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-                throw StorageException(IOException())
-            }
-        } catch (e: StorageException) {
-            // should be there
-        }
-        mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
-        }
+    mediator.withReadFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
     }
+  }
 
-    @Test
-    fun writeFileWorks() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        val expectedContent = "file content"
-        val writtenVersion = CosmasProto.FileVersion.newBuilder()
-                .setContent(ByteString.copyFrom("file content changed".toByteArray())).build()
-        val blob = getMockedBlob(expectedContent)
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(blob)
-        mediator = getMediatorWithMocked(fakeStorage)
-        mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            assertEquals(CosmasProto.FileVersion.newBuilder()
-                    .setContent(ByteString.copyFrom(expectedContent.toByteArray())).build(), it)
-            return@withWriteFile writtenVersion
-        }
-        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 1L),
-                writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
+  @Test
+  fun writeFileWorks() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    val expectedContent = "file content"
+    val writtenVersion = CosmasProto.FileVersion.newBuilder()
+        .setContent(ByteString.copyFrom("file content changed".toByteArray())).build()
+    val blob = getMockedBlob(expectedContent)
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(blob)
+    mediator = getMediatorWithMocked(fakeStorage)
+    mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      assertEquals(CosmasProto.FileVersion.newBuilder()
+          .setContent(ByteString.copyFrom(expectedContent.toByteArray())).build(), it)
+      return@withWriteFile writtenVersion
     }
+    Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 1L),
+        writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
+  }
 
 
+  @Test(expected = StorageException::class)
+  fun writeFileExceptionThrows() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(null)
 
-    @Test(expected = StorageException::class)
-    fun writeFileExceptionThrows() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(null)
-
-        mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            throw StorageException(IOException())
-        }
+    mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      throw StorageException(IOException())
     }
+  }
 
-    @Test
-    fun writeFileExceptionUnlock() {
-        val fakeStorage: Storage = Mockito.mock(Storage::class.java)
-        val writtenVersion = CosmasProto.FileVersion.newBuilder()
-                .setContent(ByteString.copyFrom("file content changed".toByteArray())).build()
-        mediator = getMediatorWithMocked(fakeStorage)
-        Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
-                .thenReturn(null)
-        mediator = getMediatorWithMocked(fakeStorage)
-        try {
-            mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-                throw StorageException(IOException())
-            }
-        } catch (e: StorageException) {
-            // should be there
-        }
-        mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
-            assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
-            return@withWriteFile writtenVersion
-        }
-        Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 0L),
-                writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
+  @Test
+  fun writeFileExceptionUnlock() {
+    val fakeStorage: Storage = Mockito.mock(Storage::class.java)
+    val writtenVersion = CosmasProto.FileVersion.newBuilder()
+        .setContent(ByteString.copyFrom("file content changed".toByteArray())).build()
+    mediator = getMediatorWithMocked(fakeStorage)
+    Mockito.`when`(fakeStorage.get(service.getBlobId("file", projectInfo())))
+        .thenReturn(null)
+    mediator = getMediatorWithMocked(fakeStorage)
+    try {
+      mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+        throw StorageException(IOException())
+      }
+    } catch (e: StorageException) {
+      // should be there
     }
-
-
-    private fun getMediatorForTests(): ServiceFilesMediator {
-        val storage = LocalStorageHelper.getOptions().service
-        service = CosmasGoogleCloudService(BUCKET_NAME, storage, getMockedClock())
-        return ServiceFilesMediator(storage, service)
+    mediator.withWriteFile("file", projectInfo(), CosmasProto.FileVersion.getDefaultInstance()) {
+      assertEquals(CosmasProto.FileVersion.getDefaultInstance(), it)
+      return@withWriteFile writtenVersion
     }
+    Mockito.verify(fakeStorage).create(service.getBlobInfo("file", projectInfo(), 0L),
+        writtenVersion.toByteArray(), Storage.BlobTargetOption.generationMatch())
+  }
 
-    private fun getMediatorWithMocked(storage: Storage): ServiceFilesMediator {
-        service = CosmasGoogleCloudService(BUCKET_NAME, storage, getMockedClock())
-        return ServiceFilesMediator(storage, service)
-    }
 
-    private fun getServiceForTests(): CosmasGoogleCloudService {
-        println(BUCKET_NAME)
-        return CosmasGoogleCloudService(BUCKET_NAME, LocalStorageHelper.getOptions().service, getMockedClock())
-    }
+  private fun getMediatorForTests(): ServiceFilesMediator {
+    val storage = LocalStorageHelper.getOptions().service
+    service = CosmasGoogleCloudService(BUCKET_NAME, storage, getMockedClock())
+    return ServiceFilesMediator(storage, service)
+  }
 
-    private fun projectInfo(): CosmasProto.ProjectInfo {
-        return CosmasProto.ProjectInfo.newBuilder()
-                .setProjectId("1")
-                .setOwnerId("1")
-                .setIsFreePlan(true)
-                .build()
-    }
+  private fun getMediatorWithMocked(storage: Storage): ServiceFilesMediator {
+    service = CosmasGoogleCloudService(BUCKET_NAME, storage, getMockedClock())
+    return ServiceFilesMediator(storage, service)
+  }
 
-    private fun getMockedBlob(fileContent: String, generation: Long = 1L): Blob {
-        val blob = Mockito.mock(Blob::class.java)
-        Mockito.`when`(blob.getContent()).thenReturn(
-                CosmasProto.FileVersion.newBuilder().setContent(
-                        ByteString.copyFrom(fileContent.toByteArray()))
-                        .build().toByteArray())
-        Mockito.`when`(blob.generation)
-                .thenReturn(generation)
-        return blob
-    }
+  private fun getServiceForTests(): CosmasGoogleCloudService {
+    println(BUCKET_NAME)
+    return CosmasGoogleCloudService(BUCKET_NAME, LocalStorageHelper.getOptions().service, getMockedClock())
+  }
 
-    private fun getMockedClock(): Ticker = ManualTicker()
+  private fun projectInfo(): CosmasProto.ProjectInfo {
+    return CosmasProto.ProjectInfo.newBuilder()
+        .setProjectId("1")
+        .setOwnerId("1")
+        .setIsFreePlan(true)
+        .build()
+  }
+
+  private fun getMockedBlob(fileContent: String, generation: Long = 1L): Blob {
+    val blob = Mockito.mock(Blob::class.java)
+    Mockito.`when`(blob.getContent()).thenReturn(
+        CosmasProto.FileVersion.newBuilder().setContent(
+            ByteString.copyFrom(fileContent.toByteArray()))
+            .build().toByteArray())
+    Mockito.`when`(blob.generation)
+        .thenReturn(generation)
+    return blob
+  }
+
+  private fun getMockedClock(): Ticker = ManualTicker()
 }
