@@ -69,15 +69,7 @@ private fun logging(funName: String, projectId: String, fileId: String = "", use
  */
 class CosmasGoogleCloudService(
     private val bucketName: String,
-    private val storage: Storage = StorageOptions.getDefaultInstance().toBuilder().apply {
-      this.setRetrySettings(RetrySettings.newBuilder()
-          .setInitialRetryDelay(Duration.ofSeconds(1))
-          .setMaxRetryDelay(Duration.ofSeconds(1))
-          .setRetryDelayMultiplier(1.0)
-          .setMaxAttempts(1)
-          .build()
-      )
-    }.build().service,
+    private val storage: Storage = createRealClient(),
     private val ticker: Ticker = WALL_TIME_TICKER,
     private val windowMaxSize: Int = 10,
     private val cacheBuilderSpec: String = "expireAfterAccess=5m") : CosmasGrpc.CosmasImplBase() {
@@ -772,4 +764,17 @@ private object WALL_TIME_TICKER : Ticker() {
   override fun read(): Long {
     return System.currentTimeMillis() * 1000000L // 1m nanos in 1ms
   }
+}
+
+internal fun createRealClient(): Storage {
+  return StorageOptions.getDefaultInstance().toBuilder().apply {
+    this.setRetrySettings(RetrySettings.newBuilder()
+        .setInitialRetryDelay(Duration.ofSeconds(1))
+        .setMaxRetryDelay(Duration.ofSeconds(1))
+        .setRetryDelayMultiplier(1.0)
+        .setMaxAttempts(2)
+        .setTotalTimeout(Duration.ofSeconds(5))
+        .build()
+    )
+  }.build().service
 }
