@@ -32,7 +32,7 @@ apply plugin: 'java'
 apply plugin: 'com.google.protobuf'
 apply plugin: 'maven-publish'
 
-group = 'com.bardsoftware.papeeria'
+group = 'com.bardsoftware.papeeria.backend'
 version = this_version
 
 sourceSets {
@@ -80,6 +80,7 @@ if (!hasProperty("mavenRepo")) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
+            artifactId = 'cosmas-proto'
             from components.java
         }
 
