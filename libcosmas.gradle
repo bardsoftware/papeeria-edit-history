@@ -1,22 +1,39 @@
+import java.text.SimpleDateFormat
+
+def read_versions() {
+    def props = new Properties()
+    props.load(new FileInputStream("${System.getenv("REPO_HOME")}/versions.properties"))
+    return props
+}
+
+def papeeriaVersion(String defaultVersion) {
+    def versions = read_versions()
+    if (project.hasProperty("ver")) {
+        return project["ver"]
+    }
+    if (versions["papeeria"] != null && !String.valueOf(versions["papeeria"]).isAllWhitespace()) {
+        return versions["papeeria"]
+    }
+    return defaultVersion
+}
+
+def this_version = papeeriaVersion(new SimpleDateFormat("yyyy.MM.dd").format(new Date()))
+
 buildscript {
     repositories {
         mavenCentral()
-        jcenter()
     }
     dependencies {
         classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.+'
     }
 }
 
-plugins {
-    id 'maven-publish'
-}
-
-apply plugin: 'com.google.protobuf'
 apply plugin: 'java'
+apply plugin: 'com.google.protobuf'
+apply plugin: 'maven-publish'
 
 group = 'com.bardsoftware.papeeria'
-version = new Date().format("yyyy.MM.dd")
+version = this_version
 
 sourceSets {
     main {
@@ -28,10 +45,10 @@ sourceSets {
 }
 
 sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
