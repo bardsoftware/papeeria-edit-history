@@ -77,6 +77,11 @@ if (!hasProperty("mavenRepo")) {
     throw new Exception("\n\n==== Please specify maven repository URL using -PmavenRepo=... command line flag ====\n\n")
 }
 
+jar {
+    from sourceSets.main.output
+    include "com/**/*"
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
