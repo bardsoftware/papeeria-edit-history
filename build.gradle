@@ -1,11 +1,18 @@
 import java.text.SimpleDateFormat
 
-buildscript {
-    ext.kotlin_version = '1.3.+'
+def read_versions() {
+    def props = new Properties()
+    props.load(new FileInputStream("${System.getenv("REPO_HOME")}/versions.properties"))
+    return props
+}
 
+def grpc_version = read_versions()["grpc"]
+def kotlin_version = read_versions()["kotlin"]
+def protobuf_version = read_versions()["protobuf"]
+
+buildscript {
     repositories {
         mavenCentral()
-        jcenter()
         maven {
             name "papeeria-maven"
             url "gcs://papeeria-maven-repo/maven2"
@@ -30,7 +37,6 @@ apply plugin: 'com.google.cloud.tools.jib'
 
 repositories {
     mavenCentral()
-    jcenter()
     google()
 }
 
@@ -39,9 +45,9 @@ configurations {
 }
 
 dependencies {
-    libprotoImplementation 'com.google.protobuf:protobuf-java:latest.release'
-    libprotoImplementation 'io.grpc:grpc-protobuf:latest.release'
-    libprotoImplementation 'io.grpc:grpc-stub:latest.release'
+    libprotoImplementation "com.google.protobuf:protobuf-java:$protobuf_version"
+    libprotoImplementation "io.grpc:grpc-protobuf:$grpc_version"
+    libprotoImplementation "io.grpc:grpc-stub:$grpc_version"
 
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     compile "io.grpc:grpc-netty:latest.release"
@@ -88,7 +94,7 @@ sourceCompatibility = 1.8
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.+'
+        artifact = "com.google.protobuf:protoc:$protobuf_version"
         generatedFilesBaseDir = "$projectDir/src/generated"
     }
     plugins {
