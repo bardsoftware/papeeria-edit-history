@@ -16,12 +16,12 @@ package com.bardsoftware.papeeria.backend.cosmas
 
 import com.google.common.base.Preconditions
 import com.google.common.collect.Queues
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
 import com.xenomachina.argparser.mainBody
 import io.grpc.Server
 import io.grpc.ServerBuilder
-import io.grpc.internal.GrpcUtil
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.ThreadPoolExecutor
@@ -41,7 +41,7 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain:
   // => 20 rps from a single thread.
   // => 200 rps per 10 threads which is way below 1000 rps for a bucket.
   // Queue capacity of 400 will allow for a queue of doubled max rps value.
-  // TODO: this settings won't save us from exceeing single object write limit
+  // TODO: this settings won't save us from exceeding single object write limit
   // of 1 rps if requests come as different RPC calls and get into different
   // threads.
   // https://cloud.google.com/storage/quotas#objects
@@ -49,7 +49,10 @@ class CosmasServer(port: Int, val service: CosmasGrpc.CosmasImplBase, certChain:
   // executor service with task affinity.
   private val executor = ThreadPoolExecutor(
       2, 10, 60L, TimeUnit.SECONDS, Queues.newArrayBlockingQueue(400),
-      GrpcUtil.getThreadFactory("cosmas-grpc-thread-%d", true))
+      ThreadFactoryBuilder()
+          .setDaemon(true)
+          .setNameFormat("cosmas-grpc-thread-%d")
+          .build())
   private val server: Server
 
   init {
@@ -89,7 +92,7 @@ fun main(args: Array<String>) = mainBody {
   val bucket = arg.bucket
 
   if (bucket == null) {
-    LOG.error("Please cpecify --bucket argument to run GCS Cosmas implementation")
+    LOG.error("Please specify --bucket argument to run GCS Cosmas implementation")
     return@mainBody
   }
   val server =
@@ -97,8 +100,8 @@ fun main(args: Array<String>) = mainBody {
         LOG.info("Starting Cosmas in SECURE mode")
         CosmasServer(arg.port,
             CosmasGoogleCloudService(bucket),
-            File(arg.certChain),
-            File(arg.privateKey))
+            File(arg.certChain!!),
+            File(arg.privateKey!!))
       } else {
         LOG.info("Starting Cosmas in INSECURE mode")
         CosmasServer(arg.port,
